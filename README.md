@@ -89,7 +89,10 @@ acme-salary-manager/
 │       │   ├── config/              security, OpenAPI, Jackson, clock
 │       │   ├── common/error/        ApiError envelope + one exception handler
 │       │   ├── common/money/        scale, rounding, proration, amount-in-words
+│       │   ├── common/persistence/  entity base classes, JPA auditing
 │       │   ├── common/web/          correlation-id filter
+│       │   ├── employee/            Employee aggregate, repository, search specs
+│       │   ├── orgdata/             departments, designations, grades
 │       │   └── security/            401/403 responders; JWT lands with auth
 │       ├── main/resources/
 │       │   ├── application.yml      + application-{dev,prod}.yml
@@ -241,8 +244,13 @@ cd frontend && npm run lint
 
 `./mvnw test` runs both unit tests and the `*IT` integration tests. The integration tests
 start a real PostgreSQL container (ADR-012) and **skip themselves when Docker is not
-running** — so a green build without Docker has not verified the schema. Start Docker to
-exercise the migration and its constraints.
+running** — so a green build without Docker has not verified the constraints, column
+types, or queries. Start Docker to exercise those.
+
+`SchemaMappingConsistencyTest` covers part of that gap with no database at all: it builds
+Hibernate's mapping metadata offline and fails if a mapped table or column is missing from
+`db/migration`, which is the mismatch that would otherwise stop startup under
+`ddl-auto: validate`.
 
 Coverage targets: 70% overall on the backend, 90% in the payroll calculation package —
 that is where the money is computed, so it carries the strictest bar.
@@ -280,8 +288,10 @@ Three documents, in the order worth reading them:
 
 - [x] Backend scaffold: Spring Boot project, Flyway baseline, health endpoint, error
       envelope, money helpers, deny-by-default security chain
+- [x] Employee and reference-data domain: entities, repositories, search specifications,
+      JPA auditing
 - [ ] Auth: login, JWT filter, role-based method security
-- [ ] Reference data and employee CRUD
+- [ ] Employee and reference-data endpoints: services, DTOs, controllers
 - [ ] Salary components and salary structures with revision history
 - [ ] Payroll run engine with proration and draft/finalise states
 - [ ] Payslip views and PDF export
