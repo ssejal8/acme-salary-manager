@@ -1,0 +1,17 @@
+# Test profile. The datasource is supplied per test class by Testcontainers
+# (@DynamicPropertySource), so nothing here points at a real database. Dev seed data is
+# deliberately excluded: a test asserts against rows it created itself.
+spring:
+  flyway:
+    locations: classpath:db/migration
+  jpa:
+    show-sql: false
+
+app:
+  jwt:
+    secret: test-only-signing-key-at-least-32-bytes-long
+
+logging:
+  level:
+    com.acme.salary: INFO
+    org.flywaydb: WARN

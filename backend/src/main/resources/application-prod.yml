@@ -1,0 +1,14 @@
+# Deployed environments. Every value below must come from the environment (NFR-2.5);
+# there are deliberately no defaults, so a missing secret fails fast at startup rather
+# than silently running on a known one. No seed location is configured here.
+spring:
+  jpa:
+    show-sql: false
+  flyway:
+    locations: classpath:db/migration
+    clean-disabled: true
+
+logging:
+  level:
+    root: INFO
+    com.acme.salary: INFO

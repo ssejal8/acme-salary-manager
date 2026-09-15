@@ -1,0 +1,43 @@
+# Local infrastructure. `docker compose up -d db` is all the backend needs to start:
+# the dev profile's defaults match the credentials below.
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: acme-salary-db
+    environment:
+      POSTGRES_DB: salary_mgmt
+      POSTGRES_USER: salary_app
+      POSTGRES_PASSWORD: salary_app_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # The API applies migrations at startup, so it must not start before the database
+      # is accepting connections.
+      test: ["CMD-SHELL", "pg_isready -U salary_app -d salary_mgmt"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Optional: run the API in a container too, once the image is built with
+  # `cd backend && ./mvnw spring-boot:build-image`. Day-to-day development runs the API
+  # on the host against the `db` service above.
+  api:
+    image: acme-salary-api:0.1.0-SNAPSHOT
+    container_name: acme-salary-api
+    profiles: ["full"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      DB_URL: jdbc:postgresql://db:5432/salary_mgmt
+      DB_USERNAME: salary_app
+      DB_PASSWORD: salary_app_dev
+      JWT_SECRET: ${JWT_SECRET:-dev-only-signing-key-change-me-at-least-32-bytes-long}
+    ports:
+      - "8080:8080"
+
+volumes:
+  pgdata:

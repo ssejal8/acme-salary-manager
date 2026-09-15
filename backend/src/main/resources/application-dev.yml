@@ -1,0 +1,25 @@
+# Local development. Defaults here match the docker-compose database so a fresh clone
+# starts with no environment set up; secrets still come from the environment when present.
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/salary_mgmt}
+    username: ${DB_USERNAME:salary_app}
+    password: ${DB_PASSWORD:salary_app_dev}
+
+  flyway:
+    # The seed location is dev-only, so fixtures can never reach a deployed schema
+    # (ADR-007). Seed scripts are idempotent and numbered from V900 to stay out of the
+    # way of real migrations.
+    locations: classpath:db/migration,classpath:db/seed
+
+  jpa:
+    show-sql: false
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:dev-only-signing-key-change-me-at-least-32-bytes-long}
+
+logging:
+  level:
+    com.acme.salary: DEBUG
+    org.flywaydb: INFO

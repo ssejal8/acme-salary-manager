@@ -349,9 +349,14 @@ Invariants that must never be violated are enforced by constraints, so a race be
 requests cannot break them:
 
 - `UNIQUE (employee_code)`, `UNIQUE (work_email)` on employees
-- `UNIQUE (period_month, period_year)` on payroll runs — the structural guard behind
-  [FR-5.7](requirements.md#35-payroll-run); the service's pre-check is a nicety for a
-  clean 409, and the constraint is what actually prevents a double run
+- A **partial** unique index on payroll runs over `(period_year, period_month)`
+  `WHERE status IN ('DRAFT','FINALISED')` — the structural guard behind
+  [FR-5.7](requirements.md#35-payroll-run). It has to be partial: a plain unique
+  constraint would also block the legitimate retry after a run is cancelled. The
+  service's pre-check is a nicety for a clean 409; the index is what actually prevents a
+  double run
+- A partial unique index on `salary_structures (employee_id) WHERE superseded_on IS NULL`
+  — an employee has at most one open revision ([FR-4.4](requirements.md#34-salary-structure))
 - `UNIQUE (payroll_run_id, employee_id)` on payslips
 - `NUMERIC(12,2)` on every monetary column, with `CHECK (amount >= 0)` where a negative
   value is meaningless

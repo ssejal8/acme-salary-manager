@@ -5,8 +5,10 @@ their salary structures, runs a monthly payroll cycle, and publishes payslips th
 employees can view and download for themselves.
 
 **Status:** early scaffold. The repository structure and the requirements are in place;
-the backend and frontend are not implemented yet. Commands below describe the intended
-developer workflow and will work as each module lands.
+the backend is scaffolded — it builds, applies its baseline migration, serves
+`/actuator/health` and Swagger UI, and denies everything else until authentication lands.
+No business endpoints and no frontend exist yet. Commands below describe the intended
+developer workflow; the frontend ones will work as that module lands.
 
 ---
 
@@ -77,18 +79,36 @@ business logic and JPA entities never cross the HTTP boundary — every response
 ## Repository layout
 
 ```
-acme-salary-management/
-├── backend/          Spring Boot REST API (Maven project)
-├── frontend/         Angular single-page application
+acme-salary-manager/
+├── backend/                         Spring Boot REST API (Maven project)
+│   ├── pom.xml
+│   ├── .env.example
+│   └── src/
+│       ├── main/java/com/acme/salary/
+│       │   ├── SalaryManagementApplication.java
+│       │   ├── config/              security, OpenAPI, Jackson, clock
+│       │   ├── common/error/        ApiError envelope + one exception handler
+│       │   ├── common/money/        scale, rounding, proration, amount-in-words
+│       │   ├── common/web/          correlation-id filter
+│       │   └── security/            401/403 responders; JWT lands with auth
+│       ├── main/resources/
+│       │   ├── application.yml      + application-{dev,prod}.yml
+│       │   ├── db/migration/        Flyway migrations (V1 baseline schema)
+│       │   └── db/seed/             dev-profile-only fixtures
+│       └── test/java/com/acme/salary/
+├── frontend/                        Angular single-page application (not started)
 ├── docs/
-│   └── requirements.md   Software requirements specification
+│   ├── requirements.md              what the system must do
+│   ├── architecture.md              how it is built
+│   └── decisions.md                 why, and what each choice cost
+├── docker-compose.yml               PostgreSQL for local development
 └── README.md
 ```
 
 ## Prerequisites
 
-- **JDK 17** — `java -version` should report 17.x
-- **Maven 3.9+** — or use the `./mvnw` wrapper once the backend is scaffolded
+- **JDK 17 or newer** — the build targets Java 17 (ADR-002) and runs on any later JDK
+- **Maven 3.9+** — or just use the bundled `./mvnw` wrapper
 - **Node.js 20+** and npm 10+
 - **Docker** and Docker Compose — for PostgreSQL locally
 - **PostgreSQL 15+** — only if you prefer running the database outside Docker
@@ -99,7 +119,7 @@ Clone, then start the database:
 
 ```bash
 git clone <repository-url>
-cd acme-salary-management
+cd acme-salary-manager
 docker compose up -d db          # PostgreSQL on localhost:5432
 ```
 
@@ -107,12 +127,17 @@ Run the backend:
 
 ```bash
 cd backend
-cp .env.example .env             # then edit the values — see Configuration
 ./mvnw spring-boot:run           # API on http://localhost:8080
 ```
 
-Flyway applies migrations on startup. With the `dev` profile active, a seed migration
-creates reference data and an admin login.
+The `dev` profile defaults match the compose database, so no `.env` is needed to start.
+Copy `.env.example` to `.env` when you need to point somewhere else — see
+[Configuration](#configuration).
+
+Flyway applies migrations on startup. Under the `dev` profile a seed migration also loads
+reference data (departments, designations, grades, salary components) and the two logins
+below; that seed location is excluded from every other profile, so fixtures can never
+reach a deployed schema.
 
 Run the frontend in a second terminal:
 
@@ -172,7 +197,7 @@ TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/login \
   -H 'Content-Type: application/json' \
   -d '{"email":"hr@acme.test","password":"Hr@12345"}' | jq -r .accessToken)
 
-curl -s http://localhost:8080/api/v1/employees?page=0&size=20 \
+curl -s 'http://localhost:8080/api/v1/employees?page=0&size=20' \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -214,6 +239,11 @@ cd frontend && npm test                      # unit tests
 cd frontend && npm run lint
 ```
 
+`./mvnw test` runs both unit tests and the `*IT` integration tests. The integration tests
+start a real PostgreSQL container (ADR-012) and **skip themselves when Docker is not
+running** — so a green build without Docker has not verified the schema. Start Docker to
+exercise the migration and its constraints.
+
 Coverage targets: 70% overall on the backend, 90% in the payroll calculation package —
 that is where the money is computed, so it carries the strictest bar.
 
@@ -248,7 +278,8 @@ Three documents, in the order worth reading them:
 
 ## Roadmap
 
-- [ ] Backend scaffold: Spring Boot project, Flyway baseline, health endpoint
+- [x] Backend scaffold: Spring Boot project, Flyway baseline, health endpoint, error
+      envelope, money helpers, deny-by-default security chain
 - [ ] Auth: login, JWT filter, role-based method security
 - [ ] Reference data and employee CRUD
 - [ ] Salary components and salary structures with revision history

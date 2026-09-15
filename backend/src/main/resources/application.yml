@@ -1,0 +1,87 @@
+spring:
+  application:
+    name: salary-management-api
+  profiles:
+    default: dev
+
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 10
+      pool-name: salary-pool
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      # Flyway owns the schema; a drift between entities and migrations must fail at
+      # startup, not in production (ADR-007). Never 'update', in any profile.
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          batch_size: 50
+          time_zone: UTC
+        order_inserts: true
+        order_updates: true
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    validate-on-migrate: true
+    baseline-on-migrate: false
+
+  jackson:
+    default-property-inclusion: non_null
+    deserialization:
+      fail-on-unknown-properties: true
+    serialization:
+      write-dates-as-timestamps: false
+
+  mvc:
+    problemdetails:
+      enabled: false   # the ApiError envelope is the one error contract
+
+server:
+  port: ${SERVER_PORT:8080}
+  error:
+    include-stacktrace: never    # NFR-2.6: no stack traces in responses
+    include-message: never
+  servlet:
+    session:
+      persistent: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health          # NFR-6.1, and nothing more than is needed
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: alpha
+  api-docs:
+    path: /v3/api-docs
+
+app:
+  jwt:
+    # No default: a missing signing key must stop startup, not fall back to a known value.
+    secret: ${JWT_SECRET}
+    expiry-minutes: ${JWT_EXPIRY_MINUTES:60}
+    refresh-expiry-days: ${JWT_REFRESH_EXPIRY_DAYS:7}
+  payroll:
+    currency: INR                # single currency by decision (ADR-020)
+
+logging:
+  pattern:
+    level: "%5p [%X{correlationId:-no-correlation-id}]"
+  level:
+    root: INFO
+    com.acme.salary: INFO
