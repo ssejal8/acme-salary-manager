@@ -234,9 +234,17 @@ that is where the money is computed, so it carries the strictest bar.
 
 ## Documentation
 
-- [docs/requirements.md](docs/requirements.md) — full SRS: scope, functional requirements
-  (`FR-*`), non-functional requirements (`NFR-*`), data model, API surface, acceptance
-  criteria, and what is deliberately out of scope.
+Three documents, in the order worth reading them:
+
+- [docs/requirements.md](docs/requirements.md) — **what** the system must do. Full SRS:
+  scope, functional requirements (`FR-*`), non-functional requirements (`NFR-*`), data
+  model, API surface, acceptance criteria, and what is deliberately out of scope.
+- [docs/architecture.md](docs/architecture.md) — **how** it is built. Container and
+  layering views, package structure, the payroll engine and its calculation pipeline,
+  data and security architecture, deployment, testing strategy, and known weaknesses.
+- [docs/decisions.md](docs/decisions.md) — **why**, and what each choice cost. Twenty
+  decision records (`ADR-*`) with rejected alternatives, consequences, and revisit
+  triggers, plus a consolidated tradeoff summary.
 
 ## Roadmap
 

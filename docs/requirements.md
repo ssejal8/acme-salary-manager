@@ -48,6 +48,8 @@ listed in [Section 9, Out of Scope](#9-out-of-scope).
 ### 1.4 References
 
 - Project README: [../README.md](../README.md)
+- Architecture: [architecture.md](architecture.md) — how the requirements are realised
+- Decision log: [decisions.md](decisions.md) — why each design choice was made, and its cost
 - Spring Boot reference documentation — https://docs.spring.io/spring-boot/
 - Angular documentation — https://angular.dev/
 
@@ -158,7 +160,7 @@ session.
 | FR-5.5 | A run shall move through the states `DRAFT → FINALISED`, and may move `DRAFT → CANCELLED`. A `FINALISED` run shall be immutable. | Must |
 | FR-5.6 | While a run is `DRAFT`, HR shall be able to review every computed payslip, adjust LOP days, and recompute. | Must |
 | FR-5.7 | The system shall reject a second run for a period that already has a `DRAFT` or `FINALISED` run, with HTTP 409. | Must |
-| FR-5.8 | Finalising a run shall generate one payslip per included employee and make those payslips visible to those employees. | Must |
+| FR-5.8 | A run shall hold one payslip per included employee from creation onwards; finalising the run shall publish those payslips, making them visible to the employees concerned, without recomputing them. | Must |
 | FR-5.9 | A run shall complete within the performance budget in NFR-1.3 and shall be atomic: a failure mid-computation shall leave no partial run. | Must |
 | FR-5.10 | The run summary shall report employee count, total gross, total deductions, and total net. | Should |
 
@@ -369,9 +371,9 @@ Explicitly not built, and not to be inferred from anything above:
 
 ## 10. Open Questions
 
-| # | Question | Owner |
+| # | Question | Status |
 | --- | --- | --- |
-| 1 | Should payslip PDFs be generated at finalisation and stored, or rendered on demand? | TBD |
-| 2 | Is a refresh-token flow required for the assessment, or is a single 60-minute token enough? | TBD |
-| 3 | What Basic-to-CTC ratio, if any, should be enforced when a structure is assigned? | TBD |
-| 4 | Does the audit trail need retention rules, or is unbounded retention acceptable? | TBD |
+| 1 | Should payslip PDFs be generated at finalisation and stored, or rendered on demand? | **Resolved** — rendered on demand, see [ADR-017](decisions.md#adr-017-render-payslip-pdfs-on-demand-instead-of-storing-them) |
+| 2 | Is a refresh-token flow required for the assessment, or is a single 60-minute token enough? | **Resolved** — refresh tokens are in scope, see [ADR-004](decisions.md#adr-004-stateless-jwt-authentication-instead-of-server-side-sessions) |
+| 3 | What Basic-to-CTC ratio, if any, should be enforced when a structure is assigned? | **Resolved** — none; the grade CTC band in FR-4.3 is the only guard, see [ADR-016](decisions.md#adr-016-two-calculation-types-instead-of-a-formula-engine) |
+| 4 | Does the audit trail need retention rules, or is unbounded retention acceptable? | Open — TBD |
