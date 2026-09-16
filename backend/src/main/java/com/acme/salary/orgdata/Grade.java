@@ -56,19 +56,21 @@ public class Grade extends AuditableEntity {
         this.maxCtc = max;
     }
 
+    /** The band as a value object, for features that check a package against it. */
+    public CtcBand band() {
+        return new CtcBand(minCtc, maxCtc);
+    }
+
     /**
      * Whether an annual CTC sits inside this band. An absent bound never rejects, so a
      * grade with no band configured accepts anything.
      */
     public boolean contains(BigDecimal annualCtc) {
-        BigDecimal ctc = Money.normalize(annualCtc);
-        boolean aboveFloor = minCtc == null || ctc.compareTo(minCtc) >= 0;
-        boolean belowCeiling = maxCtc == null || ctc.compareTo(maxCtc) <= 0;
-        return aboveFloor && belowCeiling;
+        return band().contains(Money.normalize(annualCtc));
     }
 
     public boolean hasBand() {
-        return minCtc != null || maxCtc != null;
+        return band().isConfigured();
     }
 
     private static String requireName(String name) {

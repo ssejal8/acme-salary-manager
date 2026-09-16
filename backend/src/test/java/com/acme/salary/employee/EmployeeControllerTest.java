@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.acme.salary.common.error.GlobalExceptionHandler;
 import com.acme.salary.common.web.PageResponse;
 import com.acme.salary.common.web.PageableSanitizer;
+import com.acme.salary.config.JacksonConfig;
 import com.acme.salary.config.SecurityConfig;
 import com.acme.salary.employee.EmployeeSearch.StatusFilter;
 import com.acme.salary.employee.dto.EmployeeSummaryResponse;
@@ -40,7 +41,7 @@ import org.springframework.test.web.servlet.MockMvc;
  * (FR-1.3, FR-1.4).
  */
 @WebMvcTest(controllers = EmployeeController.class)
-@Import({SecurityConfig.class, RestAuthenticationEntryPoint.class, RestAccessDeniedHandler.class,
+@Import({SecurityConfig.class, JacksonConfig.class, RestAuthenticationEntryPoint.class, RestAccessDeniedHandler.class,
         GlobalExceptionHandler.class})
 class EmployeeControllerTest {
 

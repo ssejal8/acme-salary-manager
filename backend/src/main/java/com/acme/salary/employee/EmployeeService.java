@@ -41,4 +41,16 @@ public class EmployeeService {
                 .map(EmployeeSummaryResponse::from)
                 .orElseThrow(() -> NotFoundException.of("Employee", id));
     }
+
+    /**
+     * The facts another feature needs before changing an employee's pay — joining date,
+     * status, grade band. Published as a record so no other feature holds an
+     * {@link Employee} entity (ADR-001).
+     */
+    @Transactional(readOnly = true)
+    public EmployeeCompensationContext compensationContext(Long employeeId) {
+        return employees.findWithReferencesById(employeeId)
+                .map(EmployeeCompensationContext::from)
+                .orElseThrow(() -> NotFoundException.of("Employee", employeeId));
+    }
 }

@@ -306,6 +306,8 @@ Base path `/api/v1`. All paths require a bearer token except `POST /auth/login`.
 | POST | `/employees/{id}/deactivate` | ADMIN, HR | Record exit and deactivate |
 | GET | `/employees/{id}/salary-structures` | ADMIN, HR, self | Structure history |
 | POST | `/employees/{id}/salary-structures` | ADMIN, HR | Assign new structure |
+| GET | `/employees/{id}/salary-structures/current` | ADMIN, HR, self | Structure in force, or 204 |
+| POST | `/employees/{id}/salary-structures/preview` | ADMIN, HR | Cost a proposed structure without saving (FR-4.5) |
 | GET | `/salary-components` | ADMIN, HR | List component definitions |
 | POST | `/salary-components` | ADMIN | Create component definition |
 | GET | `/departments`, `/designations`, `/grades` | ADMIN, HR | Reference data |

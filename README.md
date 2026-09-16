@@ -4,11 +4,15 @@ A web application for managing employee compensation at ACME: HR maintains emplo
 their salary structures, runs a monthly payroll cycle, and publishes payslips that
 employees can view and download for themselves.
 
-**Status:** early scaffold. The repository structure and the requirements are in place;
-the backend is scaffolded — it builds, applies its baseline migration, serves
-`/actuator/health` and Swagger UI, and denies everything else until authentication lands.
-No business endpoints and no frontend exist yet. Commands below describe the intended
-developer workflow; the frontend ones will work as that module lands.
+**Status:** backend in progress. Employee master data, salary component definitions and
+effective-dated salary structures are implemented — domain, persistence, and read/assign
+endpoints — along with the audit trail and the paging contract. Payroll runs, payslips and
+the frontend are not built yet.
+
+Authentication is the next piece, so **every business endpoint currently answers 401**:
+the filter chain denies by default and no token issuer exists yet. The endpoints are
+exercised by tests with a mocked principal rather than by curl. Commands below describe
+the intended developer workflow; the frontend ones will work as that module lands.
 
 ---
 
@@ -89,11 +93,14 @@ acme-salary-manager/
 │       │   ├── config/              security, OpenAPI, Jackson, clock
 │       │   ├── common/error/        ApiError envelope + one exception handler
 │       │   ├── common/money/        scale, rounding, proration, amount-in-words
+│       │   ├── common/audit/        audit trail written inside the business transaction
 │       │   ├── common/persistence/  entity base classes, JPA auditing
 │       │   ├── common/web/          correlation-id filter, paging contract + sanitiser
 │       │   ├── employee/            Employee aggregate, repository, search, controller
 │       │   ├── orgdata/             departments, designations, grades
-│       │   └── security/            401/403 responders; JWT lands with auth
+│       │   ├── salarycomponent/     component definitions (earnings, deductions)
+│       │   ├── salarystructure/     effective-dated packages + the pure calculator
+│       │   └── security/            user read model, current-user port, 401/403 responders
 │       ├── main/resources/
 │       │   ├── application.yml      + application-{dev,prod}.yml
 │       │   ├── db/migration/        Flyway migrations (V1 baseline schema)
@@ -231,6 +238,45 @@ Three things worth knowing about the contract:
 - **The response is a `PageResponse`**, not Spring's `Page`: `content`, `page`, `size`,
   `totalElements`, `totalPages`, `hasNext`, `hasPrevious`.
 
+### Assigning compensation
+
+A package is never edited. Assigning a new one supersedes the current revision, so the
+history stays intact and payroll for an earlier month still sees that month's figures.
+
+```bash
+# What would this package come to? Nothing is saved.
+curl -s -X POST http://localhost:8080/api/v1/employees/7/salary-structures/preview \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"effectiveFrom":"2026-04-01","components":[
+        {"componentId":1,"value":"50000.00"},
+        {"componentId":2,"value":"20000.00"},
+        {"componentId":3,"value":"12"}]}'
+# → {"basicMonthly":"50000.00","grossMonthly":"70000.00","totalDeductions":"6000.00",
+#    "netMonthly":"64000.00","annualCtc":"840000.00"}
+```
+
+| Endpoint | Roles | Purpose |
+| --- | --- | --- |
+| `GET /api/v1/salary-components` | ADMIN, HR | List component definitions |
+| `POST /api/v1/salary-components` | ADMIN | Define a component |
+| `GET /api/v1/employees/{id}/salary-structures` | ADMIN, HR | Full revision history, newest first |
+| `GET /api/v1/employees/{id}/salary-structures/current` | ADMIN, HR | The package in force, or 204 |
+| `POST /api/v1/employees/{id}/salary-structures/preview` | ADMIN, HR | Validate and cost without saving |
+| `POST /api/v1/employees/{id}/salary-structures` | ADMIN, HR | Assign, superseding the current one |
+
+Rules the API enforces, all of them server-side:
+
+- Every package needs a positive `BASIC` component; percentage components are computed
+  against it.
+- `effectiveFrom` may not precede the employee's date of joining, and a leaver's
+  compensation cannot be changed at all.
+- A package whose annual CTC falls outside the employee's grade band is rejected unless
+  `overrideReason` is supplied — the reason is stored on the revision and in the audit
+  trail.
+- Deductions may not exceed gross pay.
+- Amounts are rounded per component before summation, so the lines always add up to the
+  totals.
+
 Errors share one envelope:
 
 ```json
@@ -319,11 +365,13 @@ Three documents, in the order worth reading them:
       JPA auditing
 - [x] Employee search: paged, filtered, sorted list endpoint with a sort whitelist and a
       page-size cap
+- [x] Salary components: definitions with flat and percent-of-basic calculation
+- [x] Salary structures: effective-dated packages, revision history, grade-band guard,
+      totals preview, audit trail
 - [ ] Auth: login, JWT filter, role-based method security — until this lands, every
       employee endpoint answers 401 to an unauthenticated caller
 - [ ] Employee write endpoints: create, update, deactivate
 - [ ] Reference-data endpoints: departments, designations, grades
-- [ ] Salary components and salary structures with revision history
 - [ ] Payroll run engine with proration and draft/finalise states
 - [ ] Payslip views and PDF export
 - [ ] Angular shell: routing, auth guard, token interceptor
