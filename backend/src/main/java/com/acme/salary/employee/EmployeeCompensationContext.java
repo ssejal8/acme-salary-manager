@@ -18,6 +18,8 @@ public record EmployeeCompensationContext(
         LocalDate dateOfJoining,
         LocalDate exitDate,
         EmployeeStatus status,
+        Long departmentId,
+        String departmentName,
         Long gradeId,
         String gradeName,
         CtcBand gradeBand) {
@@ -30,6 +32,8 @@ public record EmployeeCompensationContext(
                 employee.getDateOfJoining(),
                 employee.getExitDate(),
                 employee.getStatus(),
+                employee.getDepartment().getId(),
+                employee.getDepartment().getName(),
                 employee.getGrade().getId(),
                 employee.getGrade().getName(),
                 employee.getGrade().band());

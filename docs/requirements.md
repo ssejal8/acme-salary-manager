@@ -321,6 +321,10 @@ Base path `/api/v1`. All paths require a bearer token except `POST /auth/login`.
 | GET | `/payslips/me` | EMPLOYEE | Own payslips |
 | GET | `/payslips/{id}` | ADMIN, HR, owner | Payslip detail |
 | GET | `/payslips/{id}/pdf` | ADMIN, HR, owner | Payslip as PDF |
+| GET | `/reports/compensation` | ADMIN, HR | Current salary cost, with department and grade breakdowns (FR-7.2, FR-7.4) |
+| GET | `/reports/compensation/summary` | ADMIN, HR | Organisation-wide current cost only |
+| GET | `/reports/compensation/by-department` | ADMIN, HR | Current cost per department |
+| GET | `/reports/compensation/by-grade` | ADMIN, HR | Current cost per grade |
 | GET | `/reports/payroll-register` | ADMIN, HR | Monthly register |
 | GET | `/audit-events` | ADMIN | Audit trail query |
 

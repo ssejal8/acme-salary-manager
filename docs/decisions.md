@@ -38,6 +38,7 @@ supersedes an old one, not an edit.
 | [ADR-018](#adr-018-serve-the-spa-from-the-api-as-a-single-artifact) | Serve the SPA from the API as a single artifact | Accepted |
 | [ADR-019](#adr-019-no-global-client-state-store) | No global client state store | Accepted |
 | [ADR-020](#adr-020-single-currency-and-single-legal-entity) | Single currency and single legal entity | Accepted |
+| [ADR-021](#adr-021-aggregate-compensation-analytics-in-the-application-not-in-sql) | Aggregate compensation analytics in the application, not in SQL | Accepted |
 
 A consolidated view of what all of this bought and gave up is in
 [Tradeoff summary](#tradeoff-summary) at the end.
@@ -597,6 +598,39 @@ formatting uses Indian digit grouping.
 
 ---
 
+## ADR-021: Aggregate compensation analytics in the application, not in SQL
+
+**Status:** Accepted
+
+**Context.** FR-7.2 and FR-7.4 ask what the organisation's current packages cost, split by
+department and grade. Computing a package's gross is not a plain `SUM`: a
+`PERCENT_OF_BASIC` component depends on the basic within the same structure, and every
+component is rounded individually before summation (ADR-006, NFR-3.3).
+
+**Decision.** Read the active cohort and its current revisions (three queries, batched),
+then price and aggregate in the application using the same
+`SalaryStructureCalculator` every other caller uses.
+
+**Alternatives considered.**
+
+| Alternative | Why rejected |
+| --- | --- |
+| Aggregate in SQL with a CTE resolving basic per structure | The fastest option, and it puts a second implementation of the rounding and percent-of-basic rules in a query. Two implementations of money arithmetic is precisely what ADR-006 exists to prevent, and the copy in SQL would be the one nobody unit-tests. A cost report that disagreed with a payslip by a rupee would be worse than a slow one. |
+| Denormalise gross/net/CTC onto `salary_structures` at assignment time | Genuinely attractive: one implementation (the calculator, at write time) and cheap aggregation. Deferred because it adds columns, a migration and a backfill for a report that is fast enough at this scale — and because a stored figure and a recomputed one can drift, which is a new class of bug. This is the first thing to do if the report gets slow. |
+| A materialised view refreshed on a schedule | Same duplication problem as the CTE, plus staleness in a report about salaries. |
+
+**Consequences.**
+
+- *Gained:* exactly one implementation of compensation arithmetic, so analytics, previews and payslips cannot disagree; the whole aggregation is unit-testable with no database; no new schema.
+- *Cost:* the report loads every active employee and their current revision into memory. At the few thousand employees this system targets that is the same order of work a payroll run already does (architecture §5.3), but it is a ceiling, and it grows with headcount rather than with the size of the answer.
+- *Also:* the figures price the packages *in force now*. They are not a payroll register — no attendance, no loss of pay — so they will differ from an actual month's payroll wherever someone has unpaid days. The API documents that in as many words, because a number labelled "monthly cost" invites exactly that misreading.
+
+**Revisit when** the overview endpoint approaches the 500 ms p95 budget in NFR-1.1, or
+headcount passes a few thousand — then denormalise the totals onto the structure row at
+assignment time, keeping the calculator as the single source of the arithmetic.
+
+---
+
 ## Tradeoff summary
 
 ### What was bought, and what it cost
@@ -623,6 +657,7 @@ formatting uses Indian digit grouping.
 | Single artifact (018) | One version, one origin, no CORS | Frontend change redeploys the backend |
 | No client store (019) | No cache invalidation bugs | More refetching |
 | Single currency (020) | Simplest money handling | Migration if that assumption breaks |
+| App-side analytics (021) | One implementation of the money arithmetic | Report loads the whole active cohort |
 
 ### The three tensions that shaped everything
 

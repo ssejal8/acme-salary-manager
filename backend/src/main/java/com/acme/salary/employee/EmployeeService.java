@@ -3,6 +3,7 @@ package com.acme.salary.employee;
 import com.acme.salary.common.error.NotFoundException;
 import com.acme.salary.common.web.PageResponse;
 import com.acme.salary.employee.dto.EmployeeSummaryResponse;
+import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -40,6 +41,20 @@ public class EmployeeService {
         return employees.findWithReferencesById(id)
                 .map(EmployeeSummaryResponse::from)
                 .orElseThrow(() -> NotFoundException.of("Employee", id));
+    }
+
+    /**
+     * Every active employee, as compensation contexts.
+     *
+     * <p>The cohort compensation analytics reports on (FR-7.4). Leavers are excluded
+     * because the report answers "what does the organisation cost now"; whoever has left
+     * costs nothing (ADR-014 makes that a filter, not a deletion).
+     */
+    @Transactional(readOnly = true)
+    public List<EmployeeCompensationContext> activeCompensationCohort() {
+        return employees.findAllByStatus(EmployeeStatus.ACTIVE).stream()
+                .map(EmployeeCompensationContext::from)
+                .toList();
     }
 
     /**

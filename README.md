@@ -99,6 +99,7 @@ acme-salary-manager/
 │       │   ├── employee/            Employee aggregate, repository, search, controller
 │       │   ├── orgdata/             departments, designations, grades
 │       │   ├── salarycomponent/     component definitions (earnings, deductions)
+│       │   ├── report/              compensation analytics (cost, department, grade)
 │       │   ├── salarystructure/     effective-dated packages + the pure calculator
 │       │   └── security/            user read model, current-user port, 401/403 responders
 │       ├── main/resources/
@@ -277,6 +278,37 @@ Rules the API enforces, all of them server-side:
 - Amounts are rounded per component before summation, so the lines always add up to the
   totals.
 
+### Compensation analytics
+
+What the organisation's packages currently cost, with breakdowns by department and grade
+(FR-7.4). ADMIN and HR only — an aggregate over salaries is not anonymous.
+
+```bash
+curl -s http://localhost:8080/api/v1/reports/compensation -H "Authorization: Bearer $TOKEN"
+```
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/v1/reports/compensation` | Organisation figures plus both breakdowns |
+| `GET /api/v1/reports/compensation/summary` | Organisation figures alone, for a dashboard tile |
+| `GET /api/v1/reports/compensation/by-department` | Cost per department, most expensive first |
+| `GET /api/v1/reports/compensation/by-grade` | Cost per grade, most expensive first |
+
+Each group reports headcount, how many of those hold a package, totals for gross,
+deductions, net and annual CTC, and the distribution — average, median, lowest and
+highest monthly gross. Median sits beside average deliberately: a few senior packages
+skew a mean badly.
+
+Two things to read carefully:
+
+- **This is not a payroll register.** It prices the packages in force *now* and knows
+  nothing about attendance or loss of pay, so it will differ from an actual month's
+  payroll wherever someone has unpaid days. The period-based register arrives with payroll
+  runs.
+- **Employees with no package are counted, not priced.** They appear as
+  `employeesWithoutPackage` rather than being averaged in as zero — a payroll run would
+  skip them, so the gap is the useful signal.
+
 Errors share one envelope:
 
 ```json
@@ -368,6 +400,8 @@ Three documents, in the order worth reading them:
 - [x] Salary components: definitions with flat and percent-of-basic calculation
 - [x] Salary structures: effective-dated packages, revision history, grade-band guard,
       totals preview, audit trail
+- [x] Compensation analytics: current salary cost with department and grade breakdowns,
+      coverage gaps, and distribution statistics
 - [ ] Auth: login, JWT filter, role-based method security — until this lands, every
       employee endpoint answers 401 to an unauthenticated caller
 - [ ] Employee write endpoints: create, update, deactivate

@@ -111,7 +111,7 @@ class SalaryStructureServiceTest {
         return new EmployeeCompensationContext(
                 EMPLOYEE_ID, "E-001", "Asha Menon", JOINED,
                 status == EmployeeStatus.INACTIVE ? LocalDate.of(2026, 1, 31) : null,
-                status, 30L, "G2", band);
+                status, 10L, "Engineering", 30L, "G2", band);
     }
 
     /** Basic 50,000 + HRA 20,000 − PF 12% → gross 70,000, net 64,000, CTC 840,000. */

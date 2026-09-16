@@ -18,6 +18,7 @@ import com.acme.salary.security.CurrentUser;
 import com.acme.salary.security.CurrentUserProvider;
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -73,6 +74,30 @@ public class SalaryStructureService {
     public Optional<SalaryStructureResponse> current(Long employeeId) {
         employees.compensationContext(employeeId);
         return structures.findCurrent(employeeId).map(SalaryStructureResponse::from);
+    }
+
+    /**
+     * The current package totals for many employees at once, keyed by employee id.
+     *
+     * <p>One fetch-joined query for the whole cohort, then the same calculator every
+     * other caller uses — so a cost report and a payslip can never disagree about what a
+     * package is worth. Employees with no package are simply absent from the map; that is
+     * a fact the caller reports rather than an error.
+     *
+     * <p>A package whose deductions exceed gross cannot be assigned, so
+     * {@link SalaryStructureCalculator} rejecting one here would mean data that bypassed
+     * the API. That is deliberately left to propagate rather than being quietly skipped.
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, StructureTotals> currentTotalsFor(Collection<Long> employeeIds) {
+        if (employeeIds == null || employeeIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, StructureTotals> totals = new LinkedHashMap<>();
+        for (SalaryStructure structure : structures.findCurrentForEmployees(employeeIds)) {
+            totals.put(structure.getEmployeeId(), structure.totals());
+        }
+        return totals;
     }
 
     /**

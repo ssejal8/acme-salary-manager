@@ -60,6 +60,17 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, JpaSp
     long countByStatus(EmployeeStatus status);
 
     /**
+     * Every employee with the given status, reference data included.
+     *
+     * <p>Unpaged on purpose: compensation analytics reports on the whole organisation, so
+     * a page would give a wrong total. The entity graph keeps it to one query, and the
+     * ceiling is the same few thousand employees a payroll run already loads
+     * (architecture §5.3).
+     */
+    @EntityGraph(attributePaths = {"department", "designation", "grade"})
+    List<Employee> findAllByStatus(EmployeeStatus status);
+
+    /**
      * Everyone who belongs in a payroll run for the given period (FR-2.6, FR-5.2).
      *
      * <p>Joined on or before the period ends, and not gone before it begins. There is no

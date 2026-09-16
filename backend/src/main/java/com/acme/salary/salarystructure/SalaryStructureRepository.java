@@ -1,6 +1,7 @@
 package com.acme.salary.salarystructure;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -50,6 +51,18 @@ public interface SalaryStructureRepository extends JpaRepository<SalaryStructure
             """)
     Optional<SalaryStructure> findEffectiveOn(
             @Param("employeeId") Long employeeId, @Param("onDate") LocalDate onDate);
+
+    /**
+     * The open revision for each of many employees, in one query rather than one per
+     * employee — the batch-read habit compensation analytics and payroll both depend on.
+     */
+    @Query("""
+            SELECT DISTINCT s FROM SalaryStructure s
+            LEFT JOIN FETCH s.components line
+            LEFT JOIN FETCH line.component
+            WHERE s.employeeId IN :employeeIds AND s.supersededOn IS NULL
+            """)
+    List<SalaryStructure> findCurrentForEmployees(@Param("employeeIds") Collection<Long> employeeIds);
 
     boolean existsByEmployeeIdAndEffectiveFrom(Long employeeId, LocalDate effectiveFrom);
 
