@@ -11,6 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -56,6 +57,20 @@ public class GlobalExceptionHandler {
         // The exception text can echo payload internals, so it is logged and not returned.
         log.debug("Malformed request to {}", request.getRequestURI(), ex);
         return respond(HttpStatus.BAD_REQUEST, "Request body or parameter could not be read", request, List.of());
+    }
+
+    /**
+     * A login attempt that failed. Separate from the handler below only for the message: a
+     * caller who is trying to authenticate is not helped by being told that authentication
+     * is required.
+     *
+     * <p>The message says nothing about which half was wrong, and the same text covers an
+     * unknown address and a disabled account — see {@code AuthenticationService}.
+     */
+    @ExceptionHandler(BadCredentialsException.class)
+    public ResponseEntity<ApiError> onBadCredentials(
+            BadCredentialsException ex, HttpServletRequest request) {
+        return respond(HttpStatus.UNAUTHORIZED, "Invalid email or password", request, List.of());
     }
 
     @ExceptionHandler(AuthenticationException.class)

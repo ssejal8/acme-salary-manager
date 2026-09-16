@@ -8,15 +8,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.acme.salary.common.error.GlobalExceptionHandler;
 import com.acme.salary.common.web.PageResponse;
 import com.acme.salary.common.web.PageableSanitizer;
-import com.acme.salary.config.JacksonConfig;
 import com.acme.salary.config.SecurityConfig;
 import com.acme.salary.employee.EmployeeSearch.StatusFilter;
 import com.acme.salary.employee.dto.EmployeeSummaryResponse;
-import com.acme.salary.security.RestAccessDeniedHandler;
-import com.acme.salary.security.RestAuthenticationEntryPoint;
+import com.acme.salary.support.ApiSecurityTestConfig;
 import com.acme.salary.support.EmployeeFixtures;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -36,13 +33,12 @@ import org.springframework.test.web.servlet.MockMvc;
  * The list endpoint's HTTP contract and its authorisation, exercised with a mocked service
  * — so this runs with no database and no Docker.
  *
- * <p>The real {@link SecurityConfig} is imported rather than stubbed: the point is to
- * prove the deny-by-default chain and the role rules actually apply to this endpoint
- * (FR-1.3, FR-1.4).
+ * <p>{@link ApiSecurityTestConfig} brings in the real {@link SecurityConfig} rather than a
+ * stub: the point is to prove the deny-by-default chain and the role rules actually apply
+ * to this endpoint (FR-1.3, FR-1.4).
  */
 @WebMvcTest(controllers = EmployeeController.class)
-@Import({SecurityConfig.class, JacksonConfig.class, RestAuthenticationEntryPoint.class, RestAccessDeniedHandler.class,
-        GlobalExceptionHandler.class})
+@Import(ApiSecurityTestConfig.class)
 class EmployeeControllerTest {
 
     @Autowired

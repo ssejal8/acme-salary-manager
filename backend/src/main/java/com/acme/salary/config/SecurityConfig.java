@@ -1,7 +1,10 @@
 package com.acme.salary.config;
 
+import com.acme.salary.security.JwtAuthenticationFilter;
 import com.acme.salary.security.RestAccessDeniedHandler;
 import com.acme.salary.security.RestAuthenticationEntryPoint;
+import com.acme.salary.security.jwt.JwtProperties;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -13,14 +16,14 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 /**
  * Deny-by-default filter chain.
  *
  * <p>The API is stateless and takes a bearer token (ADR-004), so there is no session and
- * no CSRF surface. The JWT filter itself arrives with the auth feature; until then every
- * path outside the public set below answers 401, which is the correct posture for a
- * scaffold — nothing is reachable by accident.
+ * no CSRF surface. Every path outside the public set below answers 401 without a valid
+ * token — nothing is reachable by accident.
  *
  * <p>Method-level {@code @PreAuthorize} is enabled here; record-level ownership checks
  * remain the service layer's job (architecture §8.1).
@@ -28,6 +31,7 @@ import org.springframework.security.web.SecurityFilterChain;
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
+@EnableConfigurationProperties(JwtProperties.class)
 public class SecurityConfig {
 
     /** Paths that must work before a caller has a token. */
@@ -50,6 +54,7 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(
             HttpSecurity http,
+            JwtAuthenticationFilter jwtAuthenticationFilter,
             RestAuthenticationEntryPoint authenticationEntryPoint,
             RestAccessDeniedHandler accessDeniedHandler) throws Exception {
 
@@ -68,6 +73,10 @@ public class SecurityConfig {
                 .exceptionHandling(handling -> handling
                         .authenticationEntryPoint(authenticationEntryPoint)
                         .accessDeniedHandler(accessDeniedHandler))
+                // Before the username/password filter, which is where a chain expects its
+                // credential-reading filter to sit. It must run before authorisation is
+                // evaluated, or every request would reach the entry point unauthenticated.
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
 

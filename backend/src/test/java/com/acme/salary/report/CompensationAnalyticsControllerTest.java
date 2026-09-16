@@ -5,15 +5,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.acme.salary.common.error.GlobalExceptionHandler;
 import com.acme.salary.common.money.Money;
-import com.acme.salary.config.JacksonConfig;
-import com.acme.salary.config.SecurityConfig;
 import com.acme.salary.report.dto.CompensationGroupResponse;
 import com.acme.salary.report.dto.CompensationMetricsResponse;
 import com.acme.salary.report.dto.CompensationOverviewResponse;
-import com.acme.salary.security.RestAccessDeniedHandler;
-import com.acme.salary.security.RestAuthenticationEntryPoint;
+import com.acme.salary.support.ApiSecurityTestConfig;
 import com.acme.salary.support.ClockTestConfig;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -33,8 +29,7 @@ import org.springframework.test.web.servlet.MockMvc;
  * this (NFR-2.7).
  */
 @WebMvcTest(controllers = CompensationAnalyticsController.class)
-@Import({SecurityConfig.class, JacksonConfig.class, RestAuthenticationEntryPoint.class,
-        RestAccessDeniedHandler.class, GlobalExceptionHandler.class})
+@Import(ApiSecurityTestConfig.class)
 class CompensationAnalyticsControllerTest {
 
     @Autowired

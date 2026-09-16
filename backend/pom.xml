@@ -23,6 +23,7 @@
         <maven.compiler.release>17</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <springdoc.version>2.9.1</springdoc.version>
+        <jjwt.version>0.12.6</jjwt.version>
     </properties>
 
     <dependencies>
@@ -55,10 +56,31 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- Security: deny-by-default filter chain now; JWT lands with the auth feature (ADR-004) -->
+        <!-- Security: deny-by-default filter chain plus HMAC-signed bearer tokens (ADR-004) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+        <!-- JJWT rather than the OAuth2 resource server: the tokens are self-issued and
+             HMAC-signed, so there is no authorisation server to integrate with and no
+             JWKS to fetch. api is compile-scope; impl and jackson are runtime-only by
+             the library's own design. -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>${jjwt.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>${jjwt.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>${jjwt.version}</version>
+            <scope>runtime</scope>
         </dependency>
 
         <!-- Operability + API documentation (NFR-5.4, NFR-6.1) -->

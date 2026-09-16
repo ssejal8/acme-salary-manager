@@ -11,17 +11,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.acme.salary.common.error.GlobalExceptionHandler;
 import com.acme.salary.common.error.ValidationException;
-import com.acme.salary.config.JacksonConfig;
-import com.acme.salary.config.SecurityConfig;
 import com.acme.salary.salarycomponent.CalculationType;
 import com.acme.salary.salarycomponent.ComponentType;
 import com.acme.salary.salarystructure.dto.SalaryStructureComponentResponse;
 import com.acme.salary.salarystructure.dto.SalaryStructureResponse;
 import com.acme.salary.salarystructure.dto.StructureTotalsResponse;
-import com.acme.salary.security.RestAccessDeniedHandler;
-import com.acme.salary.security.RestAuthenticationEntryPoint;
+import com.acme.salary.support.ApiSecurityTestConfig;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -39,8 +35,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 /** HTTP contract and authorisation for compensation packages. No database involved. */
 @WebMvcTest(controllers = SalaryStructureController.class)
-@Import({SecurityConfig.class, JacksonConfig.class, RestAuthenticationEntryPoint.class, RestAccessDeniedHandler.class,
-        GlobalExceptionHandler.class})
+@Import(ApiSecurityTestConfig.class)
 class SalaryStructureControllerTest {
 
     private static final String VALID_BODY = """
