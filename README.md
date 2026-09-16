@@ -90,8 +90,8 @@ acme-salary-manager/
 │       │   ├── common/error/        ApiError envelope + one exception handler
 │       │   ├── common/money/        scale, rounding, proration, amount-in-words
 │       │   ├── common/persistence/  entity base classes, JPA auditing
-│       │   ├── common/web/          correlation-id filter
-│       │   ├── employee/            Employee aggregate, repository, search specs
+│       │   ├── common/web/          correlation-id filter, paging contract + sanitiser
+│       │   ├── employee/            Employee aggregate, repository, search, controller
 │       │   ├── orgdata/             departments, designations, grades
 │       │   └── security/            401/403 responders; JWT lands with auth
 │       ├── main/resources/
@@ -204,6 +204,33 @@ curl -s 'http://localhost:8080/api/v1/employees?page=0&size=20' \
   -H "Authorization: Bearer $TOKEN"
 ```
 
+### Listing employees
+
+`GET /api/v1/employees` (ADMIN, HR) takes `q`, `departmentId`, `designationId`,
+`gradeId`, `status`, plus the usual `page`, `size` and `sort`:
+
+```bash
+curl -s 'http://localhost:8080/api/v1/employees?q=asha&departmentId=1&sort=lastName,asc&size=20' \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+| Parameter | Meaning |
+| --- | --- |
+| `q` | Case-insensitive match against the employee's full name |
+| `departmentId`, `designationId`, `gradeId` | Exact reference-data match |
+| `status` | `ACTIVE_ONLY` (default), `INACTIVE_ONLY`, or `ALL` |
+| `page`, `size` | Zero-based page, size capped at 100 |
+| `sort` | `employeeCode`, `firstName`, `lastName`, `workEmail`, `dateOfJoining`, `exitDate`, `status`, `department`, `designation`, `grade` — each `,asc` or `,desc` |
+
+Three things worth knowing about the contract:
+
+- **Leavers are hidden by default.** Records are soft-deleted, so an unfiltered list would
+  quietly include them; ask for `status=ALL` to see them.
+- **An unlisted `sort` key is a 400, not an ignored parameter** — it would otherwise reach
+  the query as a property path.
+- **The response is a `PageResponse`**, not Spring's `Page`: `content`, `page`, `size`,
+  `totalElements`, `totalPages`, `hasNext`, `hasPrevious`.
+
 Errors share one envelope:
 
 ```json
@@ -290,8 +317,12 @@ Three documents, in the order worth reading them:
       envelope, money helpers, deny-by-default security chain
 - [x] Employee and reference-data domain: entities, repositories, search specifications,
       JPA auditing
-- [ ] Auth: login, JWT filter, role-based method security
-- [ ] Employee and reference-data endpoints: services, DTOs, controllers
+- [x] Employee search: paged, filtered, sorted list endpoint with a sort whitelist and a
+      page-size cap
+- [ ] Auth: login, JWT filter, role-based method security — until this lands, every
+      employee endpoint answers 401 to an unauthenticated caller
+- [ ] Employee write endpoints: create, update, deactivate
+- [ ] Reference-data endpoints: departments, designations, grades
 - [ ] Salary components and salary structures with revision history
 - [ ] Payroll run engine with proration and draft/finalise states
 - [ ] Payslip views and PDF export
