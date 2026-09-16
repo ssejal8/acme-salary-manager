@@ -105,7 +105,7 @@ acme-salary-manager/
 │       ├── main/resources/
 │       │   ├── application.yml      + application-{dev,prod}.yml
 │       │   ├── db/migration/        Flyway migrations (V1 baseline schema)
-│       │   └── db/seed/             dev-profile-only fixtures
+│       │   └── db/seed/             dev-profile-only fixtures (reference data, employees)
 │       └── test/java/com/acme/salary/
 ├── frontend/                        Angular single-page application (not started)
 ├── docs/
@@ -145,10 +145,35 @@ The `dev` profile defaults match the compose database, so no `.env` is needed to
 Copy `.env.example` to `.env` when you need to point somewhere else — see
 [Configuration](#configuration).
 
-Flyway applies migrations on startup. Under the `dev` profile a seed migration also loads
-reference data (departments, designations, grades, salary components) and the two logins
-below; that seed location is excluded from every other profile, so fixtures can never
-reach a deployed schema.
+Flyway applies migrations on startup. Under the `dev` profile two seed migrations also
+load a working dataset; that seed location is excluded from every other profile, so
+fixtures can never reach a deployed schema.
+
+| Seed | Contents |
+| --- | --- |
+| `V900` | Reference data — four departments, six designations, four grades with CTC bands, seven salary components |
+| `V901` | Twelve employees with fixed ids `1001`–`1012`, nine compensation packages, one raise history, one leaver, two employees with no package |
+
+The employee seed is **deterministic**: ids, dates and row timestamps are all fixed
+literals, so employee `1001` is the same person on every machine and the figures below are
+reproducible rather than approximate.
+
+| What it shows | Figure |
+| --- | --- |
+| Headcount / active / active with a package | 12 / 11 / 9 |
+| Total active monthly gross | 950,000.00 |
+| Total deductions / net | 58,800.00 / 891,200.00 |
+| By department | Engineering 580,000 · Finance 140,000 · Sales 140,000 · HR 90,000 |
+| Median / average monthly gross | 90,000.00 / 105,555.56 |
+
+Three details are deliberate rather than accidental, because they make the interesting
+paths visible in a demo: employee `E-1001` has a **superseded revision** plus a current one
+(a raise, so the history screen has something to show); `E-1010` and `E-1011` have **no
+package**, which is what compensation analytics reports as a coverage gap; and `E-1012` is
+a **leaver** whose package stays on record but is excluded from current cost.
+
+Every seeded package sits inside its grade's CTC band, so nothing in the dataset would
+have been rejected had it gone through the API.
 
 Run the frontend in a second terminal:
 
@@ -168,6 +193,7 @@ deployed environment):
 | --- | --- | --- |
 | ADMIN | `admin@acme.test` | `Admin@123` |
 | HR | `hr@acme.test` | `Hr@12345` |
+| EMPLOYEE | `asha.menon@acme.test` | `Employee@123` — linked to employee `E-1001` |
 
 ### Production build
 
@@ -352,10 +378,14 @@ start a real PostgreSQL container (ADR-012) and **skip themselves when Docker is
 running** — so a green build without Docker has not verified the constraints, column
 types, or queries. Start Docker to exercise those.
 
-`SchemaMappingConsistencyTest` covers part of that gap with no database at all: it builds
-Hibernate's mapping metadata offline and fails if a mapped table or column is missing from
-`db/migration`, which is the mismatch that would otherwise stop startup under
-`ddl-auto: validate`.
+Two tests cover part of that gap with no database at all:
+
+- `SchemaMappingConsistencyTest` builds Hibernate's mapping metadata offline and fails if a
+  mapped table or column is missing from `db/migration` — the mismatch that would
+  otherwise stop startup under `ddl-auto: validate`.
+- `DevSeedFiguresTest` parses the dev seed SQL, prices the seeded packages with the real
+  calculator, and asserts the figures quoted above. Edit the seed and the documentation
+  stops being wrong quietly.
 
 Coverage targets: 70% overall on the backend, 90% in the payroll calculation package —
 that is where the money is computed, so it carries the strictest bar.
