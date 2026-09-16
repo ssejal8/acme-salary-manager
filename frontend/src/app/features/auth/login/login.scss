@@ -1,0 +1,44 @@
+.login {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  min-height: 100vh;
+  padding: var(--space-6) var(--space-4);
+  background: var(--colour-page);
+}
+
+.login__card {
+  width: 100%;
+  /* Comfortably inside a 360px viewport once the page padding is taken off. */
+  max-width: 26rem;
+  padding: var(--space-5);
+}
+
+.login__title {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.login__subtitle {
+  margin: var(--space-1) 0 var(--space-5);
+  color: var(--colour-text-muted);
+  font-size: 0.9375rem;
+}
+
+.login__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+.login__submit {
+  margin-top: var(--space-1);
+}
+
+@media (min-width: 40rem) {
+  .login {
+    /* Off-centre vertically: a form sitting slightly high reads better than dead centre. */
+    align-items: center;
+  }
+}

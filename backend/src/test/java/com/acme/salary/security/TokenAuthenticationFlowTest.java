@@ -55,7 +55,7 @@ import org.springframework.test.web.servlet.MockMvc;
  */
 @WebMvcTest(controllers = EmployeeController.class)
 @Import({SecurityConfig.class, JacksonConfig.class, RestAuthenticationEntryPoint.class,
-        RestAccessDeniedHandler.class, GlobalExceptionHandler.class, JwtAuthenticationFilter.class,
+        RestAccessDeniedHandler.class, GlobalExceptionHandler.class,
         AuthenticationService.class, JwtTokenService.class, ClockTestConfig.class})
 class TokenAuthenticationFlowTest {
 

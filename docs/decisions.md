@@ -39,6 +39,7 @@ supersedes an old one, not an edit.
 | [ADR-019](#adr-019-no-global-client-state-store) | No global client state store | Accepted |
 | [ADR-020](#adr-020-single-currency-and-single-legal-entity) | Single currency and single legal entity | Accepted |
 | [ADR-021](#adr-021-aggregate-compensation-analytics-in-the-application-not-in-sql) | Aggregate compensation analytics in the application, not in SQL | Accepted |
+| [ADR-022](#adr-022-hold-the-access-token-in-localstorage) | Hold the access token in `localStorage` | Accepted |
 
 A consolidated view of what all of this bought and gave up is in
 [Tradeoff summary](#tradeoff-summary) at the end.
@@ -631,6 +632,38 @@ assignment time, keeping the calculator as the single source of the arithmetic.
 
 ---
 
+## ADR-022: Hold the access token in `localStorage`
+
+**Status:** Accepted
+
+**Context.** The API is a stateless bearer-token API (ADR-004), so the SPA must put a token
+in an `Authorization` header on every request, and must survive a page reload without
+making the user sign in again. Where that token is kept is the frontend's most
+security-relevant choice, and the honest framing is that no option here is free.
+
+**Decision.** Keep the session — access token, refresh token, and the authenticated user —
+in `localStorage` under one key, read defensively on startup.
+
+**Alternatives considered.**
+
+| Alternative | Why rejected |
+| --- | --- |
+| `HttpOnly; Secure; SameSite=Strict` cookie | The genuinely more secure option against XSS, and it is incompatible with the rest of the design rather than merely inconvenient: a cookie the JavaScript cannot read cannot be put in an `Authorization` header either. Adopting it means the API authenticates from a cookie, which brings back CSRF protection on every mutating endpoint and a session concept — the design ADR-004 explicitly rejected. Worth revisiting as a whole, not as a storage tweak. |
+| In memory only, no persistence | Strictest, and it signs the user out on every page reload and in every new tab. For an internal tool where HR works through long employee lists, that is a real cost paid daily against a threat (XSS) that has a more direct mitigation. |
+| `sessionStorage` | Same exposure to script as `localStorage`, and it is per-tab — a second tab is a second sign-in. Buys almost nothing for a visible cost. |
+
+**Consequences.**
+
+- *Gained:* a reload or a new tab keeps the user signed in; one place reads and writes the session; no CSRF surface and no server-side session store, so ADR-004 stays intact.
+- *Cost:* **an XSS bug on this origin can read the token.** That is the whole of the tradeoff and it should not be softened. What bounds it is on the server: a 60-minute access token, and a `tokenVersion` that a password change or a deactivation invalidates (architecture §8.2) — the same mitigations ADR-004 already relies on. The frontend's part is not to introduce the XSS: no `innerHTML` from server data, no bypassed sanitisation, Angular's default escaping left alone.
+- *Also:* the contents are user-writable, so every read is treated as untrusted input — anything unparseable or structurally wrong is discarded as "no session" rather than trusted. This costs nothing, and without it a corrupt entry would break every page load in a way that looks like an intermittent inability to sign in.
+
+**Revisit when** the application begins serving user-authored content, which is what turns
+XSS from a bug class into a likely one — or if a security review requires `HttpOnly`, in
+which case the change is ADR-004's, not this one's.
+
+---
+
 ## Tradeoff summary
 
 ### What was bought, and what it cost
@@ -658,6 +691,7 @@ assignment time, keeping the calculator as the single source of the arithmetic.
 | No client store (019) | No cache invalidation bugs | More refetching |
 | Single currency (020) | Simplest money handling | Migration if that assumption breaks |
 | App-side analytics (021) | One implementation of the money arithmetic | Report loads the whole active cohort |
+| Token in `localStorage` (022) | Survives reload; keeps ADR-004's stateless design | An XSS bug on this origin can read the token |
 
 ### The three tensions that shaped everything
 

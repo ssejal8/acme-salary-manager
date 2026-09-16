@@ -14,7 +14,6 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
@@ -24,8 +23,15 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * chain in {@code SecurityConfig} finally has a way to say yes, and the {@code
  * @PreAuthorize} role rules already on the controllers start applying to real callers
  * rather than only to mocked ones in tests.
+ *
+ * <p>Deliberately <em>not</em> a {@code @Component}. Spring Boot auto-registers every
+ * {@link jakarta.servlet.Filter} bean into the servlet container's own filter chain, so a
+ * filter that is also added to the Spring Security chain would be registered twice: once
+ * where it belongs, and once outside it at an unrelated order. {@code OncePerRequestFilter}
+ * happens to make the duplicate harmless today, which is exactly the kind of accident that
+ * stops being harmless after someone changes an order. {@code SecurityConfig} constructs
+ * it instead, so it exists in one chain only.
  */
-@Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(JwtAuthenticationFilter.class);

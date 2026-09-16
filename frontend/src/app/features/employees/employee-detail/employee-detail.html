@@ -1,0 +1,74 @@
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a class="breadcrumb__link" routerLink="/employees">Employees</a>
+  <span class="breadcrumb__separator" aria-hidden="true">/</span>
+  <span>{{ employee()?.fullName ?? 'Employee' }}</span>
+</nav>
+
+@if (errorMessage(); as message) {
+  <p class="alert alert--error" role="alert">{{ message }}</p>
+}
+
+@if (employee(); as record) {
+  <article class="card detail">
+    <header class="detail__header">
+      <div>
+        <h1 class="detail__name">{{ record.fullName }}</h1>
+        <p class="detail__code code">{{ record.employeeCode }}</p>
+      </div>
+      @if (record.status === 'ACTIVE') {
+        <span class="badge badge--active">Active</span>
+      } @else {
+        <span class="badge badge--inactive">Left {{ record.exitDate | isoDate: '' }}</span>
+      }
+    </header>
+
+    <!--
+      A description list, not a table: these are name/value pairs about one record, and a
+      screen reader announces them as such.
+    -->
+    <dl class="detail__grid">
+      <div class="detail__item">
+        <dt class="detail__label">Work email</dt>
+        <dd class="detail__value">
+          <a class="detail__mail" href="mailto:{{ record.workEmail }}">{{ record.workEmail }}</a>
+        </dd>
+      </div>
+
+      <div class="detail__item">
+        <dt class="detail__label">Department</dt>
+        <dd class="detail__value">{{ record.department.label }}</dd>
+      </div>
+
+      <div class="detail__item">
+        <dt class="detail__label">Designation</dt>
+        <dd class="detail__value">{{ record.designation.label }}</dd>
+      </div>
+
+      <div class="detail__item">
+        <dt class="detail__label">Grade</dt>
+        <dd class="detail__value">{{ record.grade.label }}</dd>
+      </div>
+
+      <div class="detail__item">
+        <dt class="detail__label">Date of joining</dt>
+        <dd class="detail__value">{{ record.dateOfJoining | isoDate }}</dd>
+      </div>
+
+      <div class="detail__item">
+        <dt class="detail__label">Exit date</dt>
+        <!-- An absent exit date means still employed, which is why it reads "—". -->
+        <dd class="detail__value">{{ record.exitDate | isoDate }}</dd>
+      </div>
+    </dl>
+
+    <!--
+      Said plainly rather than left as a gap. Compensation is the thing a user most
+      expects on this screen, and an unexplained absence looks like a fault.
+    -->
+    <p class="detail__note">
+      Compensation, salary structure history and payslips are not part of this screen yet.
+    </p>
+  </article>
+} @else if (loaded() && !errorMessage()) {
+  <p class="alert alert--error" role="alert">This employee could not be found.</p>
+}

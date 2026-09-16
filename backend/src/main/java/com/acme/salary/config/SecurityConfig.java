@@ -1,5 +1,6 @@
 package com.acme.salary.config;
 
+import com.acme.salary.security.AuthenticationService;
 import com.acme.salary.security.JwtAuthenticationFilter;
 import com.acme.salary.security.RestAccessDeniedHandler;
 import com.acme.salary.security.RestAuthenticationEntryPoint;
@@ -54,7 +55,7 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(
             HttpSecurity http,
-            JwtAuthenticationFilter jwtAuthenticationFilter,
+            AuthenticationService authentication,
             RestAuthenticationEntryPoint authenticationEntryPoint,
             RestAccessDeniedHandler accessDeniedHandler) throws Exception {
 
@@ -76,7 +77,14 @@ public class SecurityConfig {
                 // Before the username/password filter, which is where a chain expects its
                 // credential-reading filter to sit. It must run before authorisation is
                 // evaluated, or every request would reach the entry point unauthenticated.
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                //
+                // Constructed here rather than injected as a bean: Boot auto-registers
+                // every Filter bean into the servlet container's chain as well, which
+                // would put a second copy of this filter outside the security chain at an
+                // unrelated order. See JwtAuthenticationFilter.
+                .addFilterBefore(
+                        new JwtAuthenticationFilter(authentication),
+                        UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
 

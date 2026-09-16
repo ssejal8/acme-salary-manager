@@ -1,0 +1,218 @@
+<header class="page-header">
+  <h1 class="page-header__title">Employees</h1>
+  <p class="page-header__meta">
+    @if (loaded()) {
+      @if (page().totalElements > 0) {
+        Showing {{ range().from }}–{{ range().to }} of {{ page().totalElements }}
+      } @else {
+        No matching employees
+      }
+    }
+  </p>
+</header>
+
+@if (errorMessage(); as message) {
+  <p class="alert alert--error" role="alert">{{ message }}</p>
+}
+
+<!--
+  A search landmark rather than a bare div, so the filter bar is reachable as a region.
+  Filtering happens as controls change — there is no Apply button — so the form must not
+  submit; the name box is debounced instead.
+-->
+<search class="filters card">
+  <h2 class="visually-hidden">Filter employees</h2>
+
+  <div class="filters__grid">
+    <div class="field filters__field filters__field--wide">
+      <label class="field__label" for="filter-name">Name</label>
+      <input
+        id="filter-name"
+        class="input"
+        type="search"
+        placeholder="Search by name"
+        autocomplete="off"
+        [value]="nameInput()"
+        (input)="onNameInput($any($event.target).value)"
+      />
+    </div>
+
+    <div class="field filters__field">
+      <label class="field__label" for="filter-department">Department</label>
+      <select
+        id="filter-department"
+        class="select"
+        (change)="onReferenceFilterChange('departmentId', $any($event.target).value)"
+      >
+        <option value="">Any department</option>
+        @for (department of reference().departments; track department.id) {
+          <option [value]="department.id">{{ department.name }}</option>
+        }
+      </select>
+    </div>
+
+    <div class="field filters__field">
+      <label class="field__label" for="filter-designation">Designation</label>
+      <select
+        id="filter-designation"
+        class="select"
+        (change)="onReferenceFilterChange('designationId', $any($event.target).value)"
+      >
+        <option value="">Any designation</option>
+        @for (designation of reference().designations; track designation.id) {
+          <option [value]="designation.id">{{ designation.title }}</option>
+        }
+      </select>
+    </div>
+
+    <div class="field filters__field">
+      <label class="field__label" for="filter-grade">Grade</label>
+      <select
+        id="filter-grade"
+        class="select"
+        (change)="onReferenceFilterChange('gradeId', $any($event.target).value)"
+      >
+        <option value="">Any grade</option>
+        @for (grade of reference().grades; track grade.id) {
+          <option [value]="grade.id">{{ grade.name }}</option>
+        }
+      </select>
+    </div>
+
+    <div class="field filters__field">
+      <label class="field__label" for="filter-status">Status</label>
+      <!--
+        Leavers are hidden unless asked for: records are soft-deleted, so an unfiltered
+        list would quietly include them. The select makes that a visible choice.
+      -->
+      <select
+        id="filter-status"
+        class="select"
+        [value]="statusFilter()"
+        (change)="onStatusChange($any($event.target).value)"
+      >
+        @for (option of statusOptions; track option.value) {
+          <option [value]="option.value">{{ option.label }}</option>
+        }
+      </select>
+    </div>
+  </div>
+
+  @if (hasActiveFilters()) {
+    <button type="button" class="button button--secondary filters__clear" (click)="clearFilters()">
+      Clear filters
+    </button>
+  }
+</search>
+
+<div class="card table-card">
+  <!--
+    The scroll container carries tabindex="0" and a label so a keyboard user can scroll it
+    without a pointer — a horizontally scrollable region is otherwise unreachable.
+  -->
+  <div class="table-scroll" tabindex="0" role="region" aria-label="Employees table">
+    <table class="table">
+      <caption class="visually-hidden">
+        Employees, sorted by {{ sortKey() }} {{ sortDirection() === 'asc' ? 'ascending' : 'descending' }}
+      </caption>
+      <thead>
+        <tr>
+          @for (column of columns; track column.key) {
+            <th scope="col" [attr.aria-sort]="ariaSortFor(column.key)">
+              <!--
+                A button, not a click handler on the th: sorting is an action, and it has
+                to be keyboard-operable and announced as a control (NFR-4.2).
+              -->
+              <button type="button" class="table__sort" (click)="sortBy(column.key)">
+                <span>{{ column.label }}</span>
+                <span class="table__sort-icon" aria-hidden="true">
+                  @if (sortKey() === column.key) {
+                    {{ sortDirection() === 'asc' ? '▲' : '▼' }}
+                  }
+                </span>
+              </button>
+            </th>
+          }
+          <th scope="col"><span class="visually-hidden">Actions</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (employee of page().content; track employee.id) {
+          <tr>
+            <td class="code">{{ employee.employeeCode }}</td>
+            <td>
+              <a class="table__link" [routerLink]="['/employees', employee.id]">
+                {{ employee.fullName }}
+              </a>
+              <span class="table__secondary">{{ employee.workEmail }}</span>
+            </td>
+            <td>{{ employee.department.label }}</td>
+            <td>{{ employee.designation.label }}</td>
+            <td>{{ employee.grade.label }}</td>
+            <td class="numeric">{{ employee.dateOfJoining | isoDate }}</td>
+            <td>
+              @if (employee.status === 'ACTIVE') {
+                <span class="badge badge--active">Active</span>
+              } @else {
+                <span class="badge badge--inactive">
+                  Left {{ employee.exitDate | isoDate: '' }}
+                </span>
+              }
+            </td>
+            <td class="table__actions">
+              <a class="table__link" [routerLink]="['/employees', employee.id]">
+                View<span class="visually-hidden"> {{ employee.fullName }}</span>
+              </a>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+
+  @if (loaded() && page().content.length === 0) {
+    <!-- "Nothing matches" and "nothing exists" need different next steps. -->
+    @if (hasActiveFilters()) {
+      <app-empty-state
+        title="No employees match these filters"
+        hint="Try widening the search, or clear the filters to see everyone."
+      >
+        <button type="button" class="button button--secondary" (click)="clearFilters()">
+          Clear filters
+        </button>
+      </app-empty-state>
+    } @else {
+      <app-empty-state
+        title="There are no employees yet"
+        hint="Employee records appear here once they have been created."
+      />
+    }
+  }
+</div>
+
+@if (page().totalPages > 1) {
+  <nav class="pagination" aria-label="Employee list pages">
+    <button
+      type="button"
+      class="button button--secondary"
+      [disabled]="!page().hasPrevious"
+      (click)="goToPage(page().page - 1)"
+    >
+      Previous
+    </button>
+
+    <!-- aria-live, so moving between pages is announced rather than silent. -->
+    <p class="pagination__status" aria-live="polite">
+      Page {{ page().page + 1 }} of {{ page().totalPages }}
+    </p>
+
+    <button
+      type="button"
+      class="button button--secondary"
+      [disabled]="!page().hasNext"
+      (click)="goToPage(page().page + 1)"
+    >
+      Next
+    </button>
+  </nav>
+}

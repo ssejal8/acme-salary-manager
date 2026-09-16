@@ -1,0 +1,203 @@
+:host {
+  display: block;
+  min-height: 100vh;
+}
+
+/**
+ * Off-screen until focused, rather than hidden: `display: none` would take it out of the
+ * tab order and defeat the point of it.
+ */
+.skip-link {
+  position: absolute;
+  top: 0;
+  left: var(--space-4);
+  z-index: 20;
+  padding: var(--space-2) var(--space-4);
+  background: var(--colour-surface);
+  color: var(--colour-accent);
+  font-weight: 600;
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  transform: translateY(-120%);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+/* Reserves its own height, so nothing below shifts when a request starts. */
+.progress {
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  height: 3px;
+  overflow: hidden;
+  background: transparent;
+}
+
+.progress__bar {
+  width: 40%;
+  height: 100%;
+  background: var(--colour-accent);
+  animation: progress-slide 1.1s ease-in-out infinite;
+}
+
+@keyframes progress-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(350%);
+  }
+}
+
+.header {
+  background: var(--colour-surface);
+  border-bottom: 1px solid var(--colour-border);
+}
+
+.header__inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--space-3) var(--space-4);
+}
+
+.header__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  /* Pushes the account block to the far edge while the nav sits between them. */
+  margin-right: auto;
+}
+
+.header__title {
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.header__nav-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 1px solid var(--colour-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface);
+  color: var(--colour-text);
+  cursor: pointer;
+}
+
+.header__nav-toggle-icon {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.header__account {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.header__identity {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.3;
+}
+
+.header__email {
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.header__role {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--colour-text-muted);
+}
+
+.button--compact {
+  min-height: 2.25rem;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.875rem;
+}
+
+/**
+ * Below the breakpoint the nav is a disclosure: it takes the full row beneath the header
+ * and is hidden until the toggle is pressed. That keeps the header usable at 360px
+ * (NFR-4.1) without a second layout to maintain.
+ */
+.nav {
+  display: none;
+  flex-basis: 100%;
+  order: 3;
+}
+
+.nav--expanded {
+  display: block;
+}
+
+.nav__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: var(--space-2) 0 0;
+  list-style: none;
+}
+
+.nav__link {
+  display: block;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--colour-text-muted);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.nav__link:hover {
+  background: var(--colour-page);
+  color: var(--colour-text);
+}
+
+.nav__link--active {
+  background: var(--colour-accent-subtle);
+  color: var(--colour-accent-dark);
+}
+
+.main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4) var(--space-6);
+}
+
+/* Focus on <main> is programmatic, from the skip link; a ring there would be noise. */
+.main:focus {
+  outline: none;
+}
+
+@media (min-width: 40rem) {
+  .header__nav-toggle {
+    display: none;
+  }
+
+  .nav {
+    display: block;
+    flex-basis: auto;
+    order: 0;
+    margin-right: auto;
+  }
+
+  .nav__list {
+    flex-direction: row;
+    padding: 0;
+  }
+}

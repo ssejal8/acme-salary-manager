@@ -1,0 +1,84 @@
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+.breadcrumb__link {
+  color: var(--colour-accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.breadcrumb__link:hover {
+  text-decoration: underline;
+}
+
+.detail {
+  padding: var(--space-5);
+}
+
+.detail__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--colour-border);
+}
+
+.detail__name {
+  font-size: 1.375rem;
+  font-weight: 700;
+}
+
+.detail__code {
+  margin: var(--space-1) 0 0;
+  color: var(--colour-text-muted);
+}
+
+.detail__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: var(--space-4);
+  margin: var(--space-5) 0 0;
+}
+
+.detail__item {
+  min-width: 0;
+}
+
+.detail__label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--colour-text-muted);
+}
+
+.detail__value {
+  margin: var(--space-1) 0 0;
+  /* Long addresses wrap rather than widening the grid column. */
+  overflow-wrap: anywhere;
+}
+
+.detail__mail {
+  color: var(--colour-accent);
+  text-decoration: none;
+}
+
+.detail__mail:hover {
+  text-decoration: underline;
+}
+
+.detail__note {
+  margin: var(--space-5) 0 0;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--colour-border);
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}

@@ -4,15 +4,19 @@ A web application for managing employee compensation at ACME: HR maintains emplo
 their salary structures, runs a monthly payroll cycle, and publishes payslips that
 employees can view and download for themselves.
 
-**Status:** backend in progress. Employee master data, salary component definitions and
-effective-dated salary structures are implemented — domain, persistence, and read/assign
-endpoints — along with the audit trail and the paging contract. Payroll runs, payslips and
-the frontend are not built yet.
+**Status:** in progress, and now end-to-end for the part that exists. Authentication is
+implemented — login issues a JWT, the filter chain accepts it, and the `@PreAuthorize`
+rules on every endpoint apply to real callers — so the API is reachable with curl rather
+than only from tests. Employee master data, reference data, salary component definitions
+and effective-dated salary structures are implemented, along with compensation analytics,
+the audit trail and the paging contract.
 
-Authentication is the next piece, so **every business endpoint currently answers 401**:
-the filter chain denies by default and no token issuer exists yet. The endpoints are
-exercised by tests with a mocked principal rather than by curl. Commands below describe
-the intended developer workflow; the frontend ones will work as that module lands.
+The Angular frontend covers the **shell and the employee screens**: login, a role-aware
+layout, the auth guard and interceptors, the paged/filtered/sorted employee list, and a
+read-only employee detail view. Salary-structure and compensation-dashboard screens are
+not built yet, and neither are payroll runs or payslips at either end. Employee *write*
+endpoints do not exist, so the employee screens are read-only by necessity rather than by
+choice.
 
 ---
 
@@ -26,6 +30,7 @@ the intended developer workflow; the frontend ones will work as that module land
 - [Getting started](#getting-started)
 - [Configuration](#configuration)
 - [API](#api)
+- [Frontend](#frontend)
 - [Roles and permissions](#roles-and-permissions)
 - [Testing](#testing)
 - [Project conventions](#project-conventions)
@@ -73,11 +78,11 @@ business logic and JPA entities never cross the HTTP boundary — every response
 | --- | --- |
 | Backend | Java 17, Spring Boot 3.x (Web, Validation, Security, Data JPA) |
 | Database | PostgreSQL 15+, schema managed by Flyway migrations |
-| Auth | JWT bearer tokens, BCrypt password hashing |
+| Auth | JWT bearer tokens (JJWT, HMAC-SHA256), BCrypt password hashing |
 | API docs | springdoc-openapi (Swagger UI) |
-| Frontend | Angular 17+, TypeScript, RxJS, Angular Router |
+| Frontend | Angular 21, TypeScript, RxJS, Angular Router — standalone components, signals, zoneless |
 | Build | Maven (backend), npm + Angular CLI (frontend) |
-| Tests | JUnit 5 + Mockito + Testcontainers (backend), Jasmine/Karma (frontend) |
+| Tests | JUnit 5 + Mockito + Testcontainers (backend), Vitest + Angular TestBed (frontend) |
 | Local infra | Docker + docker-compose |
 
 ## Repository layout
@@ -97,17 +102,35 @@ acme-salary-manager/
 │       │   ├── common/persistence/  entity base classes, JPA auditing
 │       │   ├── common/web/          correlation-id filter, paging contract + sanitiser
 │       │   ├── employee/            Employee aggregate, repository, search, controller
-│       │   ├── orgdata/             departments, designations, grades
+│       │   ├── orgdata/             departments, designations, grades + read endpoints
 │       │   ├── salarycomponent/     component definitions (earnings, deductions)
 │       │   ├── report/              compensation analytics (cost, department, grade)
 │       │   ├── salarystructure/     effective-dated packages + the pure calculator
-│       │   └── security/            user read model, current-user port, 401/403 responders
+│       │   └── security/            login, JWT filter, user read model, 401/403 responders
+│       │       └── jwt/             token issuing and verification (no I/O)
 │       ├── main/resources/
 │       │   ├── application.yml      + application-{dev,prod}.yml
 │       │   ├── db/migration/        Flyway migrations (V1 baseline schema)
 │       │   └── db/seed/             dev-profile-only fixtures (reference data, employees)
 │       └── test/java/com/acme/salary/
-├── frontend/                        Angular single-page application (not started)
+├── frontend/                        Angular single-page application
+│   ├── angular.json                 build, serve (with the /api proxy), test, lint
+│   ├── proxy.conf.json              dev-server proxy: /api → localhost:8080
+│   ├── .npmrc                       legacy-peer-deps, and why — see Prerequisites
+│   └── src/
+│       ├── environments/            per-environment settings (API base path)
+│       ├── styles.scss              design tokens + the shared form/table/button classes
+│       └── app/
+│           ├── core/
+│           │   ├── auth/            AuthService, token storage, auth + role guards
+│           │   ├── http/            auth, error and loading interceptors; ApiFailure
+│           │   ├── layout/          the shell: header, role-aware nav, progress bar
+│           │   └── reference-data/  departments, designations, grades
+│           ├── shared/              money and date formatting, paging contract, empty state
+│           └── features/
+│               ├── auth/login/      sign-in screen
+│               ├── employees/       list (filter · sort · page) and detail
+│               └── errors/          no-access and not-found pages
 ├── docs/
 │   ├── requirements.md              what the system must do
 │   ├── architecture.md              how it is built
@@ -120,9 +143,16 @@ acme-salary-manager/
 
 - **JDK 17 or newer** — the build targets Java 17 (ADR-002) and runs on any later JDK
 - **Maven 3.9+** — or just use the bundled `./mvnw` wrapper
-- **Node.js 20+** and npm 10+
+- **Node.js 22.12+** — Angular 21's floor. Node 20.19+ also works
 - **Docker** and Docker Compose — for PostgreSQL locally
 - **PostgreSQL 15+** — only if you prefer running the database outside Docker
+
+One wrinkle on the frontend toolchain, documented because it looks like a broken
+dependency tree and is not. npm 10.9.x crashes with `Cannot read properties of null
+(reading 'edgesOut')` while resolving Vitest's peer graph, which Angular 21 pulls in as its
+test runner. `frontend/.npmrc` sets `legacy-peer-deps=true` to work around it, so
+`npm install` just works. Delete that file once you are on npm 11 — that is Node 22.22.3+
+or 24.15+, which is also what Angular 22 requires, so the two upgrades go together.
 
 ## Getting started
 
@@ -184,7 +214,13 @@ npm start                        # SPA on http://localhost:4200
 ```
 
 The dev server proxies `/api` to `http://localhost:8080`, so no CORS configuration is
-needed locally.
+needed locally, and the SPA only ever requests a same-origin path. That is also why the
+single-artifact deployment (ADR-018) needs no configuration change: `/api/v1` resolves to
+the API in both cases.
+
+Sign in with one of the dev accounts below. `hr@acme.test` is the one to use — ADMIN works
+equally, while `asha.menon@acme.test` is an EMPLOYEE and will land on the no-access page,
+because listing everyone is not an employee's endpoint (FR-1.5).
 
 **Default dev credentials** (seeded by the `dev` profile only — never enabled in any
 deployed environment):
@@ -237,6 +273,50 @@ TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/login \
 curl -s 'http://localhost:8080/api/v1/employees?page=0&size=20' \
   -H "Authorization: Bearer $TOKEN"
 ```
+
+### Authentication
+
+`POST /auth/login` returns an access token, a refresh token, and who the caller is — the
+role travels with the tokens so the SPA can render its menu without a second round trip.
+
+| Endpoint | Roles | Purpose |
+| --- | --- | --- |
+| `POST /api/v1/auth/login` | public | Exchange credentials for tokens |
+| `POST /api/v1/auth/refresh` | public | Exchange a refresh token for a new access token |
+
+Four things about it are deliberate:
+
+- **Every failure is the same 401.** A wrong password, an unknown address and a disabled
+  account all answer `Invalid email or password`. The distinction would tell an
+  unauthenticated caller which addresses have accounts. The unknown-address path also
+  still runs a BCrypt comparison, against a hash of a random string generated at startup,
+  so it is not measurably faster than a wrong password either — the same leak by a
+  different channel.
+- **The refresh token is not rotated.** `/auth/refresh` returns the token you presented,
+  unchanged. Re-issuing it each time would slide its 7-day expiry forward without limit,
+  and a session that can never end is not a 7-day session (FR-1.7).
+- **A token is checked against the database on every request.** One indexed lookup, which
+  buys the two things a stateless token cannot tell you: whether the account is still
+  enabled, and whether its `tokenVersion` still matches. Without it a deactivated user
+  would keep working for up to an hour and a password change would log nobody out — and
+  those are the mitigations ADR-004 relies on.
+- **There is no logout endpoint.** Tokens are stateless and cannot be revoked, so a server
+  logout would report a success it could not deliver. The client discards them instead.
+
+### Reference data
+
+`GET /departments`, `/designations` and `/grades` (ADMIN, HR) return the vocabulary an
+employee record is expressed in. Unpaged: these are three closed, small lists whose only
+consumer needs all of each or none of it, and they do not grow with headcount.
+
+```bash
+curl -s http://localhost:8080/api/v1/grades -H "Authorization: Bearer $TOKEN"
+# → [{"id":1,"name":"G1","minCtc":"400000.00","maxCtc":"800000.00"}, ...]
+```
+
+A grade's CTC bounds travel with it, because they are what makes a grade mean anything to
+a client. **An absent bound means unbounded on that side, not zero** — Jackson omits nulls,
+and an unconfigured band never rejects a package (FR-4.3).
 
 ### Listing employees
 
@@ -350,6 +430,55 @@ Errors share one envelope:
 
 The endpoint table is in [docs/requirements.md](docs/requirements.md#6-api-surface).
 
+## Frontend
+
+An Angular 21 single-page application: standalone components, signals, zoneless change
+detection, and every feature area lazy-loaded by route. Module-specific notes are in
+[frontend/README.md](frontend/README.md); the structure is in
+[architecture §6](docs/architecture.md#6-frontend-architecture).
+
+### Screens
+
+| Route | Roles | What it does |
+| --- | --- | --- |
+| `/login` | public | Sign in. Mirrors the server's validation, and shows the server's message on failure |
+| `/employees` | ADMIN, HR | Employee list: name search, department/designation/grade filters, leaver visibility, sortable columns, paging |
+| `/employees/:id` | ADMIN, HR | One employee's record, read-only |
+| `/not-authorised` | any | Shown when a signed-in user's role does not cover a route |
+
+Everything above is server-driven. Nothing is filtered, sorted or paged in the browser, so
+the counts and page numbers are real — sorting page 1 of 12 re-queries and returns the
+first page of the new order rather than reordering the twenty rows in memory.
+
+### Four decisions worth knowing before reading the code
+
+- **Money is formatted from the string the API sent, never parsed into a `number`.** An
+  IEEE-754 double cannot represent most decimal amounts exactly, so `shared/money.ts`
+  inserts thousands separators by walking the characters. Longer than
+  `Intl.NumberFormat`; it is the cost of the rule in
+  [architecture §6.3](docs/architecture.md#63-money-and-locale-on-the-client).
+- **Calendar dates are formatted the same way, and `DatePipe` is not used for them.**
+  `new Date("2022-06-01")` is *UTC* midnight, which renders as 31 May anywhere behind
+  UTC — every joining and exit date a day early for users west of Greenwich, on dates that
+  payroll eligibility and proration depend on.
+- **Interceptor order in `app.config.ts` is load-bearing.** Failures propagate
+  innermost-first, so the auth interceptor is registered *after* the error interceptor in
+  order to see a raw `HttpErrorResponse` and recognise a 401. Reversed, an expired token
+  would silently fail to end the session.
+- **The session lives in `localStorage`** (ADR-022), which means an XSS bug on this origin
+  could read the token. That trade is stated rather than softened: what bounds it is the
+  60-minute token and the `tokenVersion` check on the server, and the frontend's part of
+  the bargain is not introducing the XSS.
+
+### Accessibility and responsiveness
+
+NFR-4.1 and NFR-4.2 are treated as requirements rather than aspirations: layouts are
+single-column from 360px and widen at breakpoints, wide tables scroll in their own
+keyboard-reachable region rather than pushing the page sideways, colour is never the only
+signal (invalid controls also carry `aria-invalid` and a message), sort state is announced
+via `aria-sort`, focus is always visible through `:focus-visible`, and a skip link is the
+first focusable element on every page.
+
 ## Roles and permissions
 
 | Capability | ADMIN | HR | EMPLOYEE |
@@ -365,12 +494,18 @@ The endpoint table is in [docs/requirements.md](docs/requirements.md#6-api-surfa
 Authorisation is enforced in the API. The UI hides what a role cannot do as a
 convenience only — it is not a security control.
 
+That split is visible in the code. `roleGuard('ADMIN', 'HR')` on the employees route and
+the `canManageEmployees` check behind the menu both exist so an EMPLOYEE gets an
+explanation instead of a screen filling with 403s. Neither is load-bearing: the matching
+`@PreAuthorize` on the endpoint is, and `TokenAuthenticationFlowTest` proves an EMPLOYEE
+token is refused by the API whatever the browser believed.
+
 ## Testing
 
 ```bash
 cd backend  && ./mvnw test                   # unit + integration (Testcontainers)
-cd frontend && npm test                      # unit tests
-cd frontend && npm run lint
+cd frontend && npm test                      # unit tests (Vitest + Angular TestBed)
+cd frontend && npm run lint                  # ESLint, TypeScript and templates
 ```
 
 `./mvnw test` runs both unit tests and the `*IT` integration tests. The integration tests
@@ -386,6 +521,25 @@ Two tests cover part of that gap with no database at all:
 - `DevSeedFiguresTest` parses the dev seed SQL, prices the seeded packages with the real
   calculator, and asserts the figures quoted above. Edit the seed and the documentation
   stops being wrong quietly.
+
+One backend test is worth naming, because it covers the gap the others leave.
+`TokenAuthenticationFlowTest` drives a token minted by the real login through the real
+filter chain onto a real protected endpoint. The other security tests each verify one
+link — a token round-trips, claims resolve to a caller, a role rule holds for a principal
+conjured by `@WithMockUser` — and all of them would pass while every request still
+answered 401, because none of them proves the links are joined.
+
+On the frontend, the tests that earn their place are the ones guarding a decision that is
+easy to undo by accident:
+
+- `money.spec.ts` asserts that amounts are formatted from the string the API sent, never
+  parsed into a `number`. It includes values with more significant digits than a double
+  holds exactly, so an implementation that reached for `Intl.NumberFormat` would fail.
+- `dates.spec.ts` covers the timezone trap: `new Date("2022-06-01")` is *UTC* midnight, so
+  a `DatePipe` would render every joining date a day early for anyone west of Greenwich.
+- `auth.interceptor.spec.ts` registers the interceptors in the same order as
+  `app.config.ts`, because that order is what lets the auth interceptor see a raw
+  `HttpErrorResponse`. Tested in isolation it would pass while the app did not.
 
 Coverage targets: 70% overall on the backend, 90% in the payroll calculation package —
 that is where the money is computed, so it carries the strictest bar.
@@ -415,7 +569,7 @@ Three documents, in the order worth reading them:
 - [docs/architecture.md](docs/architecture.md) — **how** it is built. Container and
   layering views, package structure, the payroll engine and its calculation pipeline,
   data and security architecture, deployment, testing strategy, and known weaknesses.
-- [docs/decisions.md](docs/decisions.md) — **why**, and what each choice cost. Twenty
+- [docs/decisions.md](docs/decisions.md) — **why**, and what each choice cost. Twenty-two
   decision records (`ADR-*`) with rejected alternatives, consequences, and revisit
   triggers, plus a consolidated tradeoff summary.
 
@@ -432,13 +586,20 @@ Three documents, in the order worth reading them:
       totals preview, audit trail
 - [x] Compensation analytics: current salary cost with department and grade breakdowns,
       coverage gaps, and distribution statistics
-- [ ] Auth: login, JWT filter, role-based method security — until this lands, every
-      employee endpoint answers 401 to an unauthenticated caller
-- [ ] Employee write endpoints: create, update, deactivate
-- [ ] Reference-data endpoints: departments, designations, grades
+- [x] Auth: login, refresh, JWT filter, role-based method security — the API is now
+      reachable with a token, and `@PreAuthorize` applies to real callers
+- [x] Reference-data read endpoints: departments, designations, grades
+- [x] Angular shell: routing, lazy feature loading, auth and role guards, the three
+      interceptors, role-aware navigation
+- [x] Angular employees: paged/filtered/sorted list and a read-only detail view
+- [ ] Employee write endpoints: create, update, deactivate — and the Angular form that
+      needs them. The detail screen is read-only until these exist
+- [ ] Angular structures: revision history and the assignment form with live preview
+- [ ] Angular compensation dashboard over `/reports/compensation`
+- [ ] Change own password (FR-1.6) — `tokenVersion` already invalidates tokens on change
+- [ ] Employee self-service `/me` endpoints and the ownership checks they need
 - [ ] Payroll run engine with proration and draft/finalise states
 - [ ] Payslip views and PDF export
-- [ ] Angular shell: routing, auth guard, token interceptor
-- [ ] Angular feature modules: employees, structures, payroll, payslips
-- [ ] Reports and dashboard
+- [ ] Reference-data write endpoints (ADMIN) and the audit-trail query endpoint
+- [ ] List filters in the URL, so a filtered employee list is a shareable link
 - [ ] CI pipeline: build, test, lint on every push

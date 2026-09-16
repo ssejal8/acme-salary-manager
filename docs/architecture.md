@@ -287,7 +287,8 @@ frontend/src/app/
 ├── core/
 │   ├── auth/           AuthService, auth guard, role guard, token storage
 │   ├── http/           auth interceptor, error interceptor, loading interceptor
-│   └── layout/         shell, navigation, role-aware menu
+│   ├── layout/         shell, navigation, role-aware menu
+│   └── reference-data/ departments, designations, grades
 ├── shared/             reusable UI: money display, period picker, data table, empty state
 └── features/
     ├── auth/           login, change password
@@ -297,6 +298,19 @@ frontend/src/app/
     ├── payslips/       my payslips, all payslips, payslip view + PDF download
     └── reports/        register, department cost, dashboard
 ```
+
+Built so far: `core/` in full, `shared/` for money, dates, the paging contract and the
+empty state, and `features/auth/login` plus `features/employees` (list and detail). The
+remaining feature areas are directories in this plan, not yet on disk.
+
+Reference data sits in `core/` rather than under a feature because three screens will
+need the same three lists and none of them owns them. It deliberately does **not** cache:
+ADR-019 rules out a client store, and the hazard being avoided is showing a stale figure.
+
+The application is **zoneless** and uses signals for component state, which is Angular 21's
+default. The practical consequence is that anything the template reads must be a signal or
+an input — a plain mutated field will not re-render. `toSignal`/`toObservable` are the
+bridge to the RxJS the HTTP client returns.
 
 Feature areas are lazy-loaded by route, so an EMPLOYEE never downloads the payroll or
 reporting code. That is a bundle-size decision, not a security one — the security control
@@ -317,6 +331,24 @@ Three interceptors carry the cross-cutting client behaviour:
    `fieldErrors` back onto the originating form.
 3. **Loading interceptor** — drives a global progress indicator.
 
+Their registration order is load-bearing, and it is not the obvious one. A request runs
+through the list top to bottom, so the first entry is outermost — but a failure propagates
+back the other way, innermost `catchError` first. The auth interceptor must therefore be
+registered **after** the error interceptor: it needs to see a raw `HttpErrorResponse` to
+recognise a 401, and the error interceptor replaces that with an `ApiFailure` on the way
+out. Reversed, an expired token would silently fail to end the session. The registration
+is `[loading, error, auth]`, and `auth.interceptor.spec.ts` registers them the same way so
+the test cannot pass while the application is broken.
+
+Two narrower rules matter for the same reason:
+
+- The auth interceptor attaches nothing to `/auth/login` or `/auth/refresh`. A user whose
+  session expired still holds a token, and sending it to the endpoint that would fix the
+  problem is pointless at best.
+- A 401 only ends the session when the failed request actually carried a token. A 401 from
+  the login endpoint is a wrong password; treating it as an expiry would navigate away
+  from the form and discard what the user typed.
+
 ### 6.3 Money and locale on the client
 
 Amounts arrive as strings, not JSON numbers, and are never parsed into JavaScript
@@ -325,6 +357,18 @@ The client formats and displays; it does not calculate. The one exception is the
 structure preview ([FR-4.5](requirements.md#34-salary-structure)), which shows an
 *indicative* gross/net as the form is edited; the authoritative figures come from the
 server on save.
+
+`shared/money.ts` takes this literally: thousands separators are inserted into the digits
+of the string, so no `Number` is ever constructed and the characters displayed are the
+characters the server sent. It is more code than `Intl.NumberFormat` would be, and that is
+the cost of the rule rather than an argument against it.
+
+Calendar dates get the same treatment in `shared/dates.ts`, for a sharper reason. A
+`LocalDate` arrives as `"2022-06-01"`, and per the ECMAScript spec `new Date("2022-06-01")`
+is parsed as *UTC* midnight — which renders as 31 May in any timezone behind UTC. Angular's
+`DatePipe` would therefore show every joining and exit date a day early for users west of
+Greenwich, and those dates drive payroll eligibility and proration. The dates are formatted
+by splitting the string, so no `Date` is involved and no zone can shift them.
 
 ## 7. Data architecture
 

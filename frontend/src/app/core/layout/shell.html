@@ -1,0 +1,78 @@
+<!--
+  A skip link is the first focusable thing on the page, so a keyboard user can reach the
+  content without tabbing the whole menu on every navigation (WCAG 2.4.1).
+-->
+<a class="skip-link" href="#main">Skip to main content</a>
+
+<!--
+  The progress bar is aria-hidden and paired with a polite live region: a bar that
+  announced itself on every keystroke of a search box would make the page unusable with a
+  screen reader, so the visual cue and the announced one are separated.
+-->
+<div class="progress" role="presentation">
+  @if (isLoading()) {
+    <div class="progress__bar" aria-hidden="true"></div>
+  }
+</div>
+<p class="visually-hidden" role="status" aria-live="polite">
+  {{ isLoading() ? 'Loading' : '' }}
+</p>
+
+<header class="header">
+  <div class="header__inner">
+    <div class="header__brand">
+      <button
+        type="button"
+        class="header__nav-toggle"
+        [attr.aria-expanded]="navExpanded()"
+        aria-controls="primary-nav"
+        (click)="toggleNav()"
+      >
+        <span class="visually-hidden">{{ navExpanded() ? 'Hide' : 'Show' }} navigation</span>
+        <span class="header__nav-toggle-icon" aria-hidden="true">≡</span>
+      </button>
+      <span class="header__title">ACME Salary Management</span>
+    </div>
+
+    <nav
+      id="primary-nav"
+      class="nav"
+      [class.nav--expanded]="navExpanded()"
+      aria-label="Primary"
+    >
+      <ul class="nav__list">
+        @for (item of visibleNavItems(); track item.path) {
+          <li>
+            <a
+              class="nav__link"
+              [routerLink]="item.path"
+              routerLinkActive="nav__link--active"
+              ariaCurrentWhenActive="page"
+              (click)="collapseNav()"
+            >
+              {{ item.label }}
+            </a>
+          </li>
+        }
+      </ul>
+    </nav>
+
+    @if (currentUser(); as user) {
+      <div class="header__account">
+        <span class="header__identity">
+          <span class="header__email">{{ user.email }}</span>
+          <!-- The role is shown because it explains what the menu does and does not offer. -->
+          <span class="header__role">{{ user.role }}</span>
+        </span>
+        <button type="button" class="button button--secondary button--compact" (click)="signOut()">
+          Sign out
+        </button>
+      </div>
+    }
+  </div>
+</header>
+
+<!-- tabindex="-1" so the skip link can move focus here, without adding it to tab order. -->
+<main id="main" class="main" tabindex="-1">
+  <router-outlet />
+</main>
