@@ -9,6 +9,8 @@ export type EmployeeStatus = 'ACTIVE' | 'INACTIVE';
  * `ACTIVE_ONLY` is the server's default and has to be overridden explicitly to see
  * leavers: records are soft-deleted (ADR-014), so an unfiltered list would quietly include
  * them.
+ *
+ * The runtime values are in {@link STATUS_FILTERS}, declared below the sort keys.
  */
 export type StatusFilter = 'ACTIVE_ONLY' | 'INACTIVE_ONLY' | 'ALL';
 
@@ -35,25 +37,36 @@ export interface EmployeeSummary {
 }
 
 /**
- * The sort keys the API accepts.
+ * The sort keys the API accepts, mirroring `EmployeeController.SORTABLE_PROPERTIES`.
  *
  * This list is not decoration. The server rejects anything outside its whitelist with a
- * 400 rather than ignoring it (it would otherwise reach the query as a property path), so
- * a typo in a column header is a failed request — worth catching in the type system.
+ * 400 rather than ignoring it — an unlisted key would otherwise reach the query as a
+ * property path — so a bad key is a failed request, not a mis-sorted list.
+ *
+ * Declared as a runtime array with the type derived from it, rather than as a union type,
+ * because both are needed: the type for compile-time safety, and the values to validate a
+ * sort key arriving from the URL, which no type can check.
  */
-export type EmployeeSortKey =
-  | 'employeeCode'
-  | 'firstName'
-  | 'lastName'
-  | 'workEmail'
-  | 'dateOfJoining'
-  | 'exitDate'
-  | 'status'
-  | 'department'
-  | 'designation'
-  | 'grade';
+export const EMPLOYEE_SORT_KEYS = [
+  'employeeCode',
+  'firstName',
+  'lastName',
+  'workEmail',
+  'dateOfJoining',
+  'exitDate',
+  'status',
+  'department',
+  'designation',
+  'grade',
+] as const;
 
-export type SortDirection = 'asc' | 'desc';
+export type EmployeeSortKey = (typeof EMPLOYEE_SORT_KEYS)[number];
+
+export const SORT_DIRECTIONS = ['asc', 'desc'] as const;
+
+export type SortDirection = (typeof SORT_DIRECTIONS)[number];
+
+export const STATUS_FILTERS = ['ACTIVE_ONLY', 'INACTIVE_ONLY', 'ALL'] as const;
 
 /** Everything the list screen sends to `GET /employees`. */
 export interface EmployeeQuery {
@@ -72,6 +85,22 @@ export interface EmployeeQuery {
 }
 
 export const DEFAULT_PAGE_SIZE = 20;
+
+/**
+ * The server caps page size at 100 (`PageableSanitizer.MAX_PAGE_SIZE`), silently, by
+ * clamping rather than rejecting. The selector therefore stops at 100: offering more would
+ * show a size the response then contradicts.
+ */
+export const MAX_PAGE_SIZE = 100;
+
+/**
+ * Rows-per-page choices.
+ *
+ * A closed set rather than a free number, so `?size=` from a URL can be validated against
+ * something. 100 is the server's ceiling; 10 exists because the filters are most useful
+ * when the result is small enough to read at a glance.
+ */
+export const PAGE_SIZE_OPTIONS = [10, 20, 50, MAX_PAGE_SIZE] as const;
 
 /** The server's own defaults: active staff, by employee code. */
 export const DEFAULT_EMPLOYEE_QUERY: EmployeeQuery = {

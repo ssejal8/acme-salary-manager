@@ -171,8 +171,21 @@
   </div>
 
   @if (loaded() && page().content.length === 0) {
-    <!-- "Nothing matches" and "nothing exists" need different next steps. -->
-    @if (hasActiveFilters()) {
+    <!--
+      Three different situations, three different next steps. Blaming the filters for a
+      shared link that points past the end of the list would send someone looking for a
+      filter they never set.
+    -->
+    @if (pageOutOfRange()) {
+      <app-empty-state
+        title="That page no longer exists"
+        hint="This list has fewer pages than when the link was made."
+      >
+        <button type="button" class="button button--secondary" (click)="goToPage(0)">
+          Go to the first page
+        </button>
+      </app-empty-state>
+    } @else if (hasActiveFilters()) {
       <app-empty-state
         title="No employees match these filters"
         hint="Try widening the search, or clear the filters to see everyone."
@@ -190,29 +203,52 @@
   }
 </div>
 
-@if (page().totalPages > 1) {
-  <nav class="pagination" aria-label="Employee list pages">
-    <button
-      type="button"
-      class="button button--secondary"
-      [disabled]="!page().hasPrevious"
-      (click)="goToPage(page().page - 1)"
-    >
-      Previous
-    </button>
+<!--
+  Shown whenever there are rows, not only when there is more than one page: with 15 results
+  at 20 per page there is nothing to page through, and choosing 10 is still a reasonable
+  thing to want.
+-->
+@if (page().totalElements > 0) {
+  <div class="list-footer">
+    <div class="list-footer__size">
+      <label class="list-footer__size-label" for="page-size">Rows per page</label>
+      <select
+        id="page-size"
+        class="select list-footer__size-select"
+        [value]="pageSize()"
+        (change)="onPageSizeChange($any($event.target).value)"
+      >
+        @for (size of pageSizeOptions; track size) {
+          <option [value]="size">{{ size }}</option>
+        }
+      </select>
+    </div>
 
-    <!-- aria-live, so moving between pages is announced rather than silent. -->
-    <p class="pagination__status" aria-live="polite">
-      Page {{ page().page + 1 }} of {{ page().totalPages }}
-    </p>
+    @if (page().totalPages > 1) {
+      <nav class="pagination" aria-label="Employee list pages">
+        <button
+          type="button"
+          class="button button--secondary button--compact"
+          [disabled]="!page().hasPrevious"
+          (click)="goToPage(page().page - 1)"
+        >
+          Previous
+        </button>
 
-    <button
-      type="button"
-      class="button button--secondary"
-      [disabled]="!page().hasNext"
-      (click)="goToPage(page().page + 1)"
-    >
-      Next
-    </button>
-  </nav>
+        <!-- aria-live, so moving between pages is announced rather than silent. -->
+        <p class="pagination__status" aria-live="polite">
+          Page {{ page().page + 1 }} of {{ page().totalPages }}
+        </p>
+
+        <button
+          type="button"
+          class="button button--secondary button--compact"
+          [disabled]="!page().hasNext"
+          (click)="goToPage(page().page + 1)"
+        >
+          Next
+        </button>
+      </nav>
+    }
+  </div>
 }

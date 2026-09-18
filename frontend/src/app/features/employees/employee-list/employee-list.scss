@@ -138,18 +138,62 @@
   text-align: right;
 }
 
+/**
+ * Stacks below the breakpoint so the size selector and the pager each get a full row at
+ * 360px, then sits them on one line with the pager at the trailing edge.
+ */
+.list-footer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.list-footer__size {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.list-footer__size-label {
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+.list-footer__size-select {
+  /* Wide enough for "100" and the native chevron, and no wider. */
+  width: auto;
+  min-width: 5rem;
+  padding-block: 0.25rem;
+  font-size: 0.875rem;
+}
+
 .pagination {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  margin-top: var(--space-4);
 }
 
 .pagination__status {
   margin: 0;
   color: var(--colour-text-muted);
   font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+@media (min-width: 40rem) {
+  .list-footer {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .pagination {
+    /* Fixed gap rather than space-between once it is no longer a full-width row. */
+    justify-content: flex-end;
+  }
 }
 
 @media (min-width: 60rem) {

@@ -442,13 +442,52 @@ detection, and every feature area lazy-loaded by route. Module-specific notes ar
 | Route | Roles | What it does |
 | --- | --- | --- |
 | `/login` | public | Sign in. Mirrors the server's validation, and shows the server's message on failure |
-| `/employees` | ADMIN, HR | Employee list: name search, department/designation/grade filters, leaver visibility, sortable columns, paging |
+| `/employees` | ADMIN, HR | Employee list: name search, department/designation/grade filters, leaver visibility, sortable columns, paging, rows-per-page |
 | `/employees/:id` | ADMIN, HR | One employee's record, read-only |
 | `/not-authorised` | any | Shown when a signed-in user's role does not cover a route |
 
 Everything above is server-driven. Nothing is filtered, sorted or paged in the browser, so
 the counts and page numbers are real — sorting page 1 of 12 re-queries and returns the
 first page of the new order rather than reordering the twenty rows in memory.
+
+### The employee list keeps its state in the URL
+
+There is no local copy of what the table is showing. Every control navigates, the criteria
+are parsed back out of the query string, and the request pipeline watches that:
+
+```
+control → router.navigate → query string → criteria → request → table
+```
+
+```
+/employees?q=asha&departmentId=1&status=ALL&page=3&size=50&sort=lastName&direction=desc
+```
+
+That indirection buys four things a local signal cannot, and that anyone reasonably
+expects of a list screen: a filtered list is a **shareable link**, **reload** keeps your
+place, **Back** undoes your last filter instead of leaving the screen, and a link pasted
+into a ticket still means what it meant when it was written.
+
+Four details are deliberate:
+
+- **Defaults are omitted.** A freshly opened list is `/employees`, not
+  `/employees?status=ACTIVE_ONLY&page=0&size=20&sort=employeeCode&direction=asc`. Only
+  what differs is written, which is what keeps a shared link readable.
+- **`page` is 1-based in the URL and 0-based in the API.** A link that read `page=2` and
+  showed the third page would be a permanent small confusion for whoever shared it.
+- **Typing replaces rather than pushes.** A ten-character search leaves one history entry,
+  not ten — otherwise Back would walk the user back through their own typing. Every
+  deliberate change (filter, sort, page, size) pushes, so Back is useful.
+- **The query string is untrusted input.** Every value is validated and anything
+  unrecognised falls back to its default. The sort key matters most: the API answers **400**
+  for a key outside its whitelist rather than ignoring it, so forwarding `?sort=passwordHash`
+  from a stale bookmark would produce an error page instead of a list. The translation lives
+  in `employee-query.ts` and is tested directly.
+
+One consequence worth naming: a link can point at a page that no longer exists, because the
+data moved on. The server answers that with an empty page, and the screen says *"That page
+no longer exists"* with a way back to the first page — rather than blaming filters the user
+never set.
 
 ### Four decisions worth knowing before reading the code
 
@@ -592,6 +631,8 @@ Three documents, in the order worth reading them:
 - [x] Angular shell: routing, lazy feature loading, auth and role guards, the three
       interceptors, role-aware navigation
 - [x] Angular employees: paged/filtered/sorted list and a read-only detail view
+- [x] Employee list state in the URL, so a filtered list is a shareable link and Back
+      undoes the last filter; rows-per-page selector
 - [ ] Employee write endpoints: create, update, deactivate — and the Angular form that
       needs them. The detail screen is read-only until these exist
 - [ ] Angular structures: revision history and the assignment form with live preview
@@ -601,5 +642,4 @@ Three documents, in the order worth reading them:
 - [ ] Payroll run engine with proration and draft/finalise states
 - [ ] Payslip views and PDF export
 - [ ] Reference-data write endpoints (ADMIN) and the audit-trail query endpoint
-- [ ] List filters in the URL, so a filtered employee list is a shareable link
 - [ ] CI pipeline: build, test, lint on every push

@@ -40,5 +40,12 @@ payroll and payslips are not built.
 - **Guards hide screens; they do not protect data.** The API authorises every request
   independently. A guard exists so an EMPLOYEE gets an explanation instead of a page full
   of 403s.
+- **The employee list has no state of its own — the URL is the state.** Controls navigate;
+  `employee-query.ts` parses the query string back into criteria. So a control must
+  navigate *only*, never also set a local signal, or the screen will briefly disagree with
+  the URL. The search box is the one exception, and is a `linkedSignal` over the URL's term
+  for that reason.
+- **`page` is 1-based in the URL, 0-based in the API,** and defaults are omitted from the
+  query string entirely.
 - **The app is zoneless.** Anything a template reads must be a signal or an input; a
   mutated plain field will not re-render.

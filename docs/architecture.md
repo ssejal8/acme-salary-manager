@@ -323,6 +323,31 @@ through feature services and held in component state, because every screen here 
 straightforward read of server-owned data with no cross-screen shared mutation. The only
 genuinely global state is the authenticated user and their role, held in `AuthService`.
 
+**List screens keep their view state in the URL rather than in the component.** The
+employee list holds no copy of what it is showing: controls navigate, the criteria are
+parsed out of the query string, and the request pipeline watches that.
+
+```
+control → router.navigate → query string → criteria → request → table
+```
+
+This is the same principle as ADR-019 rather than an exception to it — one source of truth,
+no second copy to fall out of step — and the URL is the one piece of client state the user
+can see, share and navigate. It is what makes a filtered list a shareable link, reload keep
+its place, and Back undo the last filter.
+
+Two rules follow from it. A control must **navigate only**, never also set local state, or
+the screen would briefly show something the URL disagrees with. And the query string is
+**untrusted input**: it is hand-editable and bookmarkable, so every value is validated on
+the way in and anything unrecognised falls back to a default. The sort key is the sharp
+case — the API answers 400 for a key outside its whitelist rather than ignoring it, so
+passing one through would turn a stale bookmark into an error page.
+
+The one deliberate exception is a debounced text input. The search box keeps its own value,
+because routing every keystroke through a debounce and a navigation before it appeared
+would make the box feel broken. It is a `linkedSignal` over the URL's term, so it is
+writable while typing and still resets when the URL changes from elsewhere.
+
 Three interceptors carry the cross-cutting client behaviour:
 
 1. **Auth interceptor** — attaches the bearer token; on 401, clears the session and

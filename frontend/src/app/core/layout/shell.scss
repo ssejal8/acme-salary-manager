@@ -123,12 +123,6 @@
   color: var(--colour-text-muted);
 }
 
-.button--compact {
-  min-height: 2.25rem;
-  padding: 0.25rem 0.75rem;
-  font-size: 0.875rem;
-}
-
 /**
  * Below the breakpoint the nav is a disclosure: it takes the full row beneath the header
  * and is hidden until the toggle is pressed. That keeps the header usable at 360px
