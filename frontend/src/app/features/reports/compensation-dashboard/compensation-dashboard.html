@@ -1,0 +1,188 @@
+<header class="page-header">
+  <div>
+    <h1 class="page-header__title">Compensation</h1>
+    <p class="page-header__subtitle">
+      What the packages in force cost the organisation right now.
+    </p>
+  </div>
+  @if (overview(); as report) {
+    <!-- A true instant, so DatePipe and the viewer's timezone are correct here. -->
+    <p class="page-header__meta">
+      As at {{ report.generatedAt | date: 'd MMM y, HH:mm' }}
+    </p>
+  }
+</header>
+
+@if (errorMessage(); as message) {
+  <p class="alert alert--error" role="alert">{{ message }}</p>
+}
+
+@if (organisation(); as org) {
+  <!--
+    Said before the figures, not in a footnote. A number labelled "monthly cost" invites
+    being read as a payroll total, and this one knows nothing about attendance or loss of
+    pay — so it will differ from an actual month wherever someone has unpaid days.
+  -->
+  <p class="alert alert--info caveat" role="note">
+    <strong>This is not a payroll register.</strong> It prices the packages in force today
+    and does not account for attendance or loss of pay, so an actual month's payroll will
+    differ wherever someone has unpaid days. Leavers are excluded.
+  </p>
+
+  @if (coverageGap() > 0) {
+    <!--
+      A status, and it ships with a label rather than relying on colour: these employees
+      are counted but not priced, and a payroll run would skip them.
+    -->
+    <p class="alert alert--warning" role="status">
+      <strong>Coverage gap:</strong>
+      {{ coverageGap() }}
+      {{ coverageGap() === 1 ? 'active employee has' : 'active employees have' }}
+      no compensation package, so they are counted below but not priced — and a payroll run
+      would skip them.
+      <a class="caveat__link" routerLink="/employees">Review employees</a>
+    </p>
+  }
+
+  <section class="headline" aria-labelledby="headline-heading">
+    <h2 class="visually-hidden" id="headline-heading">Organisation totals</h2>
+
+    <!--
+      The hero figure. Deliberately not `.numeric`: tabular figures make a large
+      standalone number look mechanically spaced, and there is no column here to align to.
+    -->
+    <div class="card hero">
+      <p class="hero__label">Total monthly gross</p>
+      <p class="hero__value">{{ org.totalMonthlyGross | money }}</p>
+      <p class="hero__detail">
+        {{ org.employeesWithPackage }} of {{ org.headcount }} active employees priced
+      </p>
+    </div>
+
+    <dl class="tiles">
+      <div class="card tile">
+        <dt class="tile__label">Total deductions</dt>
+        <dd class="tile__value numeric">{{ org.totalMonthlyDeductions | money }}</dd>
+      </div>
+      <div class="card tile">
+        <dt class="tile__label">Total monthly net</dt>
+        <dd class="tile__value numeric">{{ org.totalMonthlyNet | money }}</dd>
+      </div>
+      <div class="card tile">
+        <dt class="tile__label">Total annual CTC</dt>
+        <dd class="tile__value numeric">{{ org.totalAnnualCtc | money }}</dd>
+      </div>
+      <div class="card tile">
+        <dt class="tile__label">Headcount</dt>
+        <dd class="tile__value numeric">{{ org.headcount }}</dd>
+      </div>
+    </dl>
+  </section>
+
+  <section class="card distribution" aria-labelledby="distribution-heading">
+    <h2 class="section__title" id="distribution-heading">Distribution of monthly gross</h2>
+    <!--
+      Median beside average on purpose: a few senior packages skew a mean badly, and the
+      pair says more than either figure alone.
+    -->
+    <p class="section__note">
+      The median sits beside the average because a few senior packages skew a mean — where
+      the two diverge, the average is the less representative number.
+    </p>
+    <dl class="tiles tiles--inline">
+      <div class="tile tile--plain">
+        <dt class="tile__label">Average</dt>
+        <dd class="tile__value numeric">{{ org.averageMonthlyGross | money }}</dd>
+      </div>
+      <div class="tile tile--plain">
+        <dt class="tile__label">Median</dt>
+        <dd class="tile__value numeric">{{ org.medianMonthlyGross | money }}</dd>
+      </div>
+      <div class="tile tile--plain">
+        <dt class="tile__label">Lowest</dt>
+        <dd class="tile__value numeric">{{ org.lowestMonthlyGross | money }}</dd>
+      </div>
+      <div class="tile tile--plain">
+        <dt class="tile__label">Highest</dt>
+        <dd class="tile__value numeric">{{ org.highestMonthlyGross | money }}</dd>
+      </div>
+    </dl>
+  </section>
+
+  <!--
+    One template for both breakdowns: they carry identical information about different
+    groupings and should not drift apart.
+  -->
+  <ng-container
+    [ngTemplateOutlet]="breakdown"
+    [ngTemplateOutletContext]="{
+      heading: 'By department',
+      groups: byDepartment(),
+      groupLabel: 'Department',
+    }"
+  />
+
+  <ng-container
+    [ngTemplateOutlet]="breakdown"
+    [ngTemplateOutletContext]="{
+      heading: 'By grade',
+      groups: byGrade(),
+      groupLabel: 'Grade',
+    }"
+  />
+} @else if (hasNoData()) {
+  <div class="card">
+    <p class="empty">
+      No compensation packages have been assigned yet, so there is nothing to price.
+    </p>
+  </div>
+}
+
+<ng-template #breakdown let-heading="heading" let-groups="groups" let-groupLabel="groupLabel">
+  @if (groups.length > 0) {
+    <section class="card section" [attr.aria-label]="heading">
+      <h2 class="section__title">{{ heading }}</h2>
+      <p class="section__note">Most expensive first, by share of monthly gross.</p>
+
+      <div class="table-scroll" tabindex="0" role="region" [attr.aria-label]="heading + ' table'">
+        <table class="breakdown">
+          <thead>
+            <tr>
+              <th scope="col">{{ groupLabel }}</th>
+              <th scope="col">Priced</th>
+              <th scope="col" class="breakdown__share-header">Share of gross</th>
+              <th scope="col" class="breakdown__amount">Monthly gross</th>
+              <th scope="col" class="breakdown__amount">Monthly net</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (group of groups; track group.groupId) {
+              <tr>
+                <th scope="row" class="breakdown__name">{{ group.groupName }}</th>
+                <td class="numeric">{{ coverageOf(group) }}</td>
+                <td class="breakdown__share">
+                  <!--
+                    The bar and the figure together: the bar makes the magnitudes
+                    comparable, the number makes it readable. Every bar is the same hue —
+                    shading by value would encode the same number twice.
+                  -->
+                  <span class="bar" [attr.title]="groupDetail(group)">
+                    <span
+                      class="bar__fill"
+                      [style.width.%]="barWidth(group.shareOfMonthlyGross)"
+                    ></span>
+                  </span>
+                  <span class="bar__value numeric">
+                    {{ group.shareOfMonthlyGross | percentage }}
+                  </span>
+                </td>
+                <td class="numeric">{{ group.metrics.totalMonthlyGross | money }}</td>
+                <td class="numeric">{{ group.metrics.totalMonthlyNet | money }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+</ng-template>

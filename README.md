@@ -11,12 +11,16 @@ than only from tests. Employee master data, reference data, salary component def
 and effective-dated salary structures are implemented, along with compensation analytics,
 the audit trail and the paging contract.
 
-The Angular frontend covers the **shell and the employee screens**: login, a role-aware
-layout, the auth guard and interceptors, the paged/filtered/sorted employee list, and a
-read-only employee detail view. Salary-structure and compensation-dashboard screens are
-not built yet, and neither are payroll runs or payslips at either end. Employee *write*
-endpoints do not exist, so the employee screens are read-only by necessity rather than by
-choice.
+The Angular frontend now covers **every screen whose API exists**: login and a role-aware
+shell, the paged/filtered/sorted employee list with its state in the URL, the employee
+record with its compensation and full revision history, the package assignment form with a
+live server-side preview, the compensation dashboard, and the salary component definitions.
+
+What is left is blocked on the backend rather than on the UI: payroll runs, payslips,
+employee create/update/deactivate, employee self-service, change password, and the audit
+trail query all need endpoints that do not exist yet. One consequence is worth naming —
+**an EMPLOYEE can sign in but has nowhere to go**, because every screen is ADMIN/HR and the
+`/me` endpoints their own view needs are not built.
 
 ---
 
@@ -126,10 +130,13 @@ acme-salary-manager/
 │           │   ├── http/            auth, error and loading interceptors; ApiFailure
 │           │   ├── layout/          the shell: header, role-aware nav, progress bar
 │           │   └── reference-data/  departments, designations, grades
-│           ├── shared/              money and date formatting, paging contract, empty state
+│           ├── shared/              money/rate and date formatting, paging, empty state
 │           └── features/
 │               ├── auth/login/      sign-in screen
 │               ├── employees/       list (filter · sort · page) and detail
+│               ├── structures/      salary history + the assignment form with live preview
+│               ├── components/      salary component definitions (create is ADMIN-only)
+│               ├── reports/         compensation dashboard
 │               └── errors/          no-access and not-found pages
 ├── docs/
 │   ├── requirements.md              what the system must do
@@ -443,7 +450,10 @@ detection, and every feature area lazy-loaded by route. Module-specific notes ar
 | --- | --- | --- |
 | `/login` | public | Sign in. Mirrors the server's validation, and shows the server's message on failure |
 | `/employees` | ADMIN, HR | Employee list: name search, department/designation/grade filters, leaver visibility, sortable columns, paging, rows-per-page |
-| `/employees/:id` | ADMIN, HR | One employee's record, read-only |
+| `/employees/:id` | ADMIN, HR | One employee's record, plus the package in force and every revision behind it |
+| `/employees/:id/salary-structures/new` | ADMIN, HR | Assign a package, with gross/net/CTC costed by the server as the figures are edited |
+| `/reports/compensation` | ADMIN, HR | What the packages in force cost, by department and by grade |
+| `/salary-components` | ADMIN, HR | Component definitions; only ADMIN may define one |
 | `/not-authorised` | any | Shown when a signed-in user's role does not cover a route |
 
 Everything above is server-driven. Nothing is filtered, sorted or paged in the browser, so
@@ -488,6 +498,78 @@ One consequence worth naming: a link can point at a page that no longer exists, 
 data moved on. The server answers that with an empty page, and the screen says *"That page
 no longer exists"* with a way back to the first page — rather than blaming filters the user
 never set.
+
+### Compensation on the employee screen
+
+The employee record carries its compensation: the package in force with its totals and
+line-by-line breakdown, and every superseded revision behind it, collapsed until asked for.
+
+It is a separate component (`features/structures/`) on a separate endpoint, rendered beside
+the identity data rather than inside it — so a failure to read the salary history, which has
+stricter reasons to fail, still leaves the employee's record on screen.
+
+Four things the screen is careful about:
+
+- **Each table shows its own subtotal.** Amounts are rounded *per component* before being
+  summed (NFR-3.3), which is precisely what makes the lines add up to the total exactly.
+  Showing both is what makes the arithmetic checkable by hand — the property ADR-006 spends
+  a little purity to buy.
+- **A percentage is not money.** A `PERCENT_OF_BASIC` component's `configuredValue` is
+  `"12.00"` meaning twelve per cent, so it renders as `12% of basic` alongside the
+  `₹9,000.00` it produces. Through the money formatter it would read `₹12.00`, for what is
+  actually a nine-thousand-rupee deduction — hence a separate `percentage` pipe, and a test
+  asserting no rate ever carries a currency symbol.
+- **An override reason is stated, not tucked away.** It is present only where a package was
+  accepted outside the employee's grade CTC band (FR-4.3), so its presence is the signal.
+- **No package is a gap, not an error.** An employee with none is what compensation
+  analytics counts as `employeesWithoutPackage` and what a payroll run skips, so the screen
+  says so and distinguishes it from a failed request.
+
+Only the history endpoint is called. The response already flags the current revision, so
+asking `/current` as well would be two sources that could disagree — and it answers 204 when
+nothing is assigned, which is a second empty-state path for no gain.
+
+### Assigning a package
+
+The one genuinely interactive screen, and the one ADR-003 cites as a reason for choosing
+Angular: gross, net and annual CTC update as the figures are edited.
+
+**The server computes; the screen only asks.** Every figure comes from `POST …/preview`,
+debounced on each edit. Nothing is added up in the browser — components are rounded
+individually before being summed (NFR-3.3), so a total computed here would disagree with
+the one that gets saved.
+
+Because the preview runs the *same* validation as the assignment, it doubles as validation.
+The screen has almost no business rules of its own: it does not know that a package needs a
+positive `BASIC`, that deductions may not exceed gross, or where a grade's band sits. It
+asks, and shows the answer. Two consequences:
+
+- **The grade band asks for itself.** A package outside the employee's band is allowed, but
+  only deliberately (FR-4.3). The server signals it by rejecting the preview with a field
+  error on `overrideReason`, so the reason box appears exactly when one is needed, carrying
+  the server's own account of which band was missed and by how much.
+- **Saving waits on a successful preview.** Without one there is no evidence the assignment
+  would be accepted, and FR-4.5 exists so nobody commits to a package sight unseen.
+
+The form is pre-filled from the package in force, which makes a raise a small edit rather
+than a re-entry of six figures. The effective date is deliberately left blank — it is the
+one field that has to be a decision.
+
+### The compensation dashboard
+
+Organisation totals as stat tiles, then department and grade breakdowns as **tables with an
+inline share bar**. The form is deliberate: four or five rows of a single measure would be
+worse as a pie (close values get harder to compare) and worse as a bare chart (it would hide
+the figures people need). The table keeps the numbers readable and the bar makes the
+magnitudes comparable — and it is inherently the table view accessibility asks for.
+
+Every bar is the **same** hue. Shading each one by its own value would encode the same
+number twice, since the category is already named in the row. The hue is the accent,
+checked for lightness, chroma and contrast against the chart surface rather than eyeballed.
+
+Two things the screen is careful to say: it is **not a payroll register** — it prices the
+packages in force and knows nothing about attendance or loss of pay — and the **median sits
+beside the average** because a few senior packages skew a mean.
 
 ### Four decisions worth knowing before reading the code
 
@@ -633,10 +715,14 @@ Three documents, in the order worth reading them:
 - [x] Angular employees: paged/filtered/sorted list and a read-only detail view
 - [x] Employee list state in the URL, so a filtered list is a shareable link and Back
       undoes the last filter; rows-per-page selector
+- [x] Angular compensation: the package in force with its line-by-line breakdown, and the
+      full revision history, on the employee record
 - [ ] Employee write endpoints: create, update, deactivate — and the Angular form that
       needs them. The detail screen is read-only until these exist
-- [ ] Angular structures: revision history and the assignment form with live preview
-- [ ] Angular compensation dashboard over `/reports/compensation`
+- [x] Angular structures: the assignment form with live server-side preview, the
+      grade-band override prompt, and the `POST` that supersedes the current revision
+- [x] Angular compensation dashboard over `/reports/compensation`
+- [x] Angular salary components: definitions list, with create gated to ADMIN
 - [ ] Change own password (FR-1.6) — `tokenVersion` already invalidates tokens on change
 - [ ] Employee self-service `/me` endpoints and the ownership checks they need
 - [ ] Payroll run engine with proration and draft/finalise states

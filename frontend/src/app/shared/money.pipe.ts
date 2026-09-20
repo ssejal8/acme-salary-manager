@@ -1,5 +1,5 @@
 import { Pipe, PipeTransform } from '@angular/core';
-import { formatAmount, formatMoney } from './money';
+import { formatAmount, formatMoney, formatPercentage } from './money';
 
 /**
  * Renders an API amount string as currency: `{{ totals.netMonthly | money }}`.
@@ -19,5 +19,18 @@ export class MoneyPipe implements PipeTransform {
 export class AmountPipe implements PipeTransform {
   transform(amount: string | null | undefined, fallback = '—'): string {
     return formatAmount(amount, fallback);
+  }
+}
+
+/**
+ * Renders a rate: `{{ component.configuredValue | percentage }}` gives `12%`.
+ *
+ * Kept distinct from `money` so a percentage can never pick up a currency symbol — see
+ * {@link formatPercentage}.
+ */
+@Pipe({ name: 'percentage' })
+export class PercentagePipe implements PipeTransform {
+  transform(rate: string | null | undefined, fallback = '—'): string {
+    return formatPercentage(rate, fallback);
   }
 }

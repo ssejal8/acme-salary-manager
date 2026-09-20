@@ -50,7 +50,38 @@ export const routes: Routes = [
                 (m) => m.EmployeeDetail,
               ),
           },
+          {
+            // Before `:id/...` would be ambiguous — it is not, because the segment after
+            // the id is literal. Kept as a sibling rather than a child of the detail route
+            // so the form is a full screen rather than something rendered beneath a record.
+            path: ':id/salary-structures/new',
+            title: 'Assign package · ACME Salary Management',
+            loadComponent: () =>
+              import('./features/structures/assign-structure/assign-structure').then(
+                (m) => m.AssignStructure,
+              ),
+          },
         ],
+      },
+      {
+        path: 'reports/compensation',
+        title: 'Compensation · ACME Salary Management',
+        // An aggregate over salaries is not anonymous — a department of one discloses that
+        // person's pay exactly — so this is ADMIN/HR with no relaxed variant (NFR-2.7).
+        canActivate: [roleGuard('ADMIN', 'HR')],
+        loadComponent: () =>
+          import('./features/reports/compensation-dashboard/compensation-dashboard').then(
+            (m) => m.CompensationDashboard,
+          ),
+      },
+      {
+        path: 'salary-components',
+        title: 'Salary components · ACME Salary Management',
+        canActivate: [roleGuard('ADMIN', 'HR')],
+        loadComponent: () =>
+          import('./features/components/component-list/component-list').then(
+            (m) => m.ComponentList,
+          ),
       },
       {
         path: 'not-authorised',

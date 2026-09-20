@@ -17,10 +17,18 @@ frontend fault.
 
 ## What is built
 
-Login, the application shell with role-aware navigation, the auth and role guards, the
-three HTTP interceptors, the employee list (server-side paging, filtering and sorting),
-and a read-only employee detail view. Salary structures, the compensation dashboard,
-payroll and payslips are not built.
+Every screen whose API exists: login, the shell with role-aware navigation, the auth and
+role guards, the three HTTP interceptors, the employee list (server-side paging, filtering
+and sorting, state in the URL), the employee record with its compensation and revision
+history, the package assignment form with a live server-side preview, the compensation
+dashboard, and the salary component definitions.
+
+Not built because the endpoints do not exist: payroll runs, payslips, employee
+create/update/deactivate, employee self-service (`/me`), change password, audit trail.
+**An EMPLOYEE has no usable screen** for the same reason.
+
+Not built: the salary structure **assignment** form (the write half — preview, grade-band
+override, supersede), the compensation dashboard, payroll and payslips.
 
 ## Things that will look wrong until you know why
 
@@ -47,5 +55,22 @@ payroll and payslips are not built.
   for that reason.
 - **`page` is 1-based in the URL, 0-based in the API,** and defaults are omitted from the
   query string entirely.
+- **A percentage goes through the `percentage` pipe, never `money`.** A component's
+  `configuredValue` is `"12.00"` meaning twelve per cent; as money it would read `₹12.00`
+  for a ₹9,000 deduction. `formatPercentage` trims trailing zeros where `formatAmount` pads
+  them, which is safe only because no total is derived from a displayed rate.
+- **Every figure on the compensation screens comes from the server.** Nothing is summed in
+  the browser — the subtotal rows render the server's `grossMonthly` and `totalDeductions`,
+  which is what makes the lines tie exactly. The assignment form previews against
+  `POST …/preview` on each edit for the same reason.
+- **The assignment form has almost no validation of its own.** The preview endpoint runs
+  the same checks as the save, so the form asks and displays. The grade-band override box
+  appears because the server returns a field error on `overrideReason` — not because the
+  form re-implements the band check.
+- **A `computed()` over a `FormControl.value` never recomputes** — a control's value is not
+  a signal. Bridge it with `toSignal(control.valueChanges)`. This was a real bug in the
+  component form's unit label, caught by a test.
+- **One flat hue for every bar on the dashboard.** Shading by value would encode the same
+  number twice, since the row already names the category.
 - **The app is zoneless.** Anything a template reads must be a signal or an input; a
   mutated plain field will not re-render.

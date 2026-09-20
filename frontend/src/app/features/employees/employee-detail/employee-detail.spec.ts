@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { Observable, of, throwError } from 'rxjs';
 import { ApiFailure } from '../../../core/http/api-error';
+import { SalaryStructureService } from '../../structures/salary-structure.service';
 import { EmployeeSummary } from '../employee.models';
 import { EmployeeService } from '../employee.service';
 import { EmployeeDetail } from './employee-detail';
@@ -28,10 +29,13 @@ describe('EmployeeDetail', () => {
   let component: EmployeeDetail;
 
   let requestedIds: number[];
+  /** Employee ids the embedded salary history asked for. */
+  let structureRequests: number[];
   let getResult: () => Observable<EmployeeSummary>;
 
   beforeEach(() => {
     requestedIds = [];
+    structureRequests = [];
     getResult = () => of(employee());
 
     TestBed.configureTestingModule({
@@ -43,6 +47,18 @@ describe('EmployeeDetail', () => {
             get: (id: number) => {
               requestedIds.push(id);
               return getResult();
+            },
+          },
+        },
+        // This screen renders <app-salary-history>, which fetches on its own. Stubbed
+        // rather than left to the real service so these tests stay free of HTTP — and so
+        // the id handed down is observable, which is the whole of the integration.
+        {
+          provide: SalaryStructureService,
+          useValue: {
+            history: (employeeId: number) => {
+              structureRequests.push(employeeId);
+              return of([]);
             },
           },
         },
@@ -99,10 +115,41 @@ describe('EmployeeDetail', () => {
     expect(text()).toContain('Left 31 Mar 2026');
   });
 
-  it('carries no compensation, and says so rather than leaving a gap', async () => {
+  describe('the compensation section', () => {
+    it('is rendered for the loaded employee', async () => {
+      await createComponent();
+
+      expect(text()).toContain('Compensation');
+    });
+
+    it('is given the employee id, not the raw route segment', async () => {
+      // The child takes a number, so the parent is what turns "1001" into 1001 — and it
+      // only does so once a real employee has loaded.
+      await createComponent('1001');
+
+      expect(structureRequests).toEqual([1001]);
+    });
+
+    it('is not asked for at all when the employee could not be loaded', async () => {
+      getResult = () => throwError(() => new ApiFailure(404, 'Employee 4242 was not found'));
+
+      await createComponent('4242');
+
+      expect(structureRequests).toEqual([]);
+    });
+
+    it('is not asked for when the route id is not a valid reference', async () => {
+      await createComponent('abc');
+
+      expect(structureRequests).toEqual([]);
+    });
+  });
+
+  it('still says plainly which parts are missing', async () => {
+    // Payslips remain unbuilt. An unexplained gap on this screen looks like a fault.
     await createComponent();
 
-    expect(text()).toContain('not part of this screen yet');
+    expect(text()).toContain('Payslips are not part of this screen yet');
   });
 
   it('refetches when the route moves to another employee', async () => {

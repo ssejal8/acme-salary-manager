@@ -1,0 +1,235 @@
+.page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.page-header__title {
+  font-size: 1.375rem;
+  font-weight: 700;
+}
+
+.page-header__subtitle {
+  margin: var(--space-1) 0 0;
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+.page-header__meta {
+  margin: 0;
+  color: var(--colour-text-muted);
+  font-size: 0.8125rem;
+}
+
+.caveat {
+  display: block;
+  margin-bottom: var(--space-3);
+}
+
+.caveat__link {
+  margin-left: var(--space-1);
+  color: inherit;
+  font-weight: 700;
+}
+
+.headline {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+  margin: var(--space-4) 0;
+}
+
+/**
+ * The hero figure.
+ *
+ * No `tabular-nums` here on purpose: equal-width digits are for aligning a column, and on
+ * a large standalone number they read as mechanically spaced. The sans stack stays — a
+ * display or serif face on a figure like this reads as decoration.
+ */
+.hero {
+  padding: var(--space-5);
+}
+
+.hero__label {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--colour-text-muted);
+}
+
+.hero__value {
+  margin: var(--space-2) 0 0;
+  font-size: 2.25rem;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--colour-text);
+}
+
+.hero__detail {
+  margin: var(--space-2) 0 0;
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.tiles--inline {
+  margin-top: var(--space-3);
+}
+
+.tile {
+  padding: var(--space-3) var(--space-4);
+  min-width: 0;
+}
+
+/* Inside a card already, so no second surface. */
+.tile--plain {
+  padding: 0;
+}
+
+.tile__label {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--colour-text-muted);
+}
+
+.tile__value {
+  margin: var(--space-1) 0 0;
+  /* Overrides .numeric's right alignment: a labelled tile is not a column. */
+  text-align: left;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.section,
+.distribution {
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.section__title {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.section__note {
+  margin: var(--space-1) 0 0;
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-top: var(--space-3);
+}
+
+.breakdown {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+}
+
+.breakdown th,
+.breakdown td {
+  padding: var(--space-3) var(--space-3);
+  text-align: left;
+  white-space: nowrap;
+  /* A hairline rule, not a heavy one: chrome should stay recessive. */
+  border-bottom: 1px solid var(--colour-border);
+}
+
+.breakdown tbody tr:last-child th,
+.breakdown tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.breakdown thead th {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--colour-text-muted);
+}
+
+.breakdown__amount,
+.breakdown__share-header {
+  text-align: right;
+}
+
+.breakdown__share-header {
+  text-align: left;
+}
+
+.breakdown__name {
+  font-weight: 600;
+}
+
+.breakdown__share {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 12rem;
+}
+
+/**
+ * The share bar.
+ *
+ * A thin mark on a recessive track, with a rounded data-end anchored to the baseline. No
+ * border around the fill — marks are separated by surface, not outlines — and every bar
+ * takes the same hue, because shading by value would encode the same number twice.
+ */
+.bar {
+  position: relative;
+  display: block;
+  flex: 1 1 auto;
+  height: 8px;
+  min-width: 4rem;
+  background: var(--colour-border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.bar__fill {
+  display: block;
+  height: 100%;
+  background: var(--colour-accent);
+  border-radius: 999px;
+  /* A share of zero should still read as a mark rather than as nothing. */
+  min-width: 2px;
+}
+
+.bar__value {
+  flex: 0 0 auto;
+  min-width: 3.5rem;
+  font-size: 0.875rem;
+  color: var(--colour-text-muted);
+}
+
+.empty {
+  margin: 0;
+  padding: var(--space-5);
+  text-align: center;
+  color: var(--colour-text-muted);
+}
+
+@media (min-width: 48rem) {
+  .headline {
+    /* The hero keeps its own column; the tiles wrap beside it. */
+    grid-template-columns: minmax(0, 18rem) minmax(0, 1fr);
+    align-items: start;
+  }
+}

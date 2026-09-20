@@ -4,6 +4,7 @@ import { RouterLink } from '@angular/router';
 import { catchError, of, switchMap, tap } from 'rxjs';
 import { ApiFailure } from '../../../core/http/api-error';
 import { IsoDatePipe } from '../../../shared/dates';
+import { SalaryHistory } from '../../structures/salary-history/salary-history';
 import { EmployeeSummary } from '../employee.models';
 import { EmployeeService } from '../employee.service';
 
@@ -14,13 +15,14 @@ import { EmployeeService } from '../employee.service';
  * write endpoints (create, update, deactivate) are not built yet, so there is nothing to
  * put behind an Edit button. When they land, this is where the form goes.
  *
- * There is no compensation on this screen either, for the same reason in reverse — the
- * structure endpoints exist, but the history and assignment screens are a separate
- * feature area (architecture §6.1) and not part of this pass.
+ * Compensation is rendered by {@link SalaryHistory}, which owns its own request, loading
+ * and failure states. Keeping it separate means a failure to read the salary history —
+ * a different endpoint with stricter reasons to fail — still leaves the employee's record
+ * on screen.
  */
 @Component({
   selector: 'app-employee-detail',
-  imports: [RouterLink, IsoDatePipe],
+  imports: [RouterLink, IsoDatePipe, SalaryHistory],
   templateUrl: './employee-detail.html',
   styleUrl: './employee-detail.scss',
 })

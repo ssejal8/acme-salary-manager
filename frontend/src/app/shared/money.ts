@@ -57,6 +57,38 @@ export function formatAmount(amount: string | null | undefined, fallback = '—'
   return `${negative ? '-' : ''}${groupDigits(whole)}.${paddedFraction}`;
 }
 
+/**
+ * Formats a rate for display, e.g. `"12.00"` to `"12%"` and `"12.50"` to `"12.5%"`.
+ *
+ * A percentage is **not** money, and the difference matters twice over. It must not carry a
+ * currency symbol — a `PERCENT_OF_BASIC` component's `configuredValue` is `12.00` meaning
+ * twelve per cent, and rendering that as `₹12.00` would be actively misleading. And unlike
+ * an amount, trailing zeros carry no information here: `12.00%` and `12%` are the same
+ * rate, whereas `₹12` and `₹12.00` differ in what they promise about precision.
+ *
+ * So this trims where {@link formatAmount} pads. The trimming is safe precisely because no
+ * total is computed from the displayed rate: the server has already applied it and sent the
+ * resulting amount.
+ */
+export function formatPercentage(rate: string | null | undefined, fallback = '—'): string {
+  if (rate === null || rate === undefined || rate.trim() === '') {
+    return fallback;
+  }
+
+  const trimmed = rate.trim();
+  if (!/^-?\d+(\.\d+)?$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  // String operations rather than parseFloat, for the same reason as everywhere else in
+  // this file: the digits displayed are the digits the server sent.
+  const withoutTrailingZeros = trimmed.includes('.')
+    ? trimmed.replace(/0+$/, '').replace(/\.$/, '')
+    : trimmed;
+
+  return `${withoutTrailingZeros}%`;
+}
+
 /** Inserts a comma every three digits from the right, on the string. */
 function groupDigits(digits: string): string {
   let grouped = '';

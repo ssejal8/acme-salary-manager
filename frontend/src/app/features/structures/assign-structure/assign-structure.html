@@ -1,0 +1,258 @@
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a class="breadcrumb__link" routerLink="/employees">Employees</a>
+  <span class="breadcrumb__separator" aria-hidden="true">/</span>
+  @if (employee(); as record) {
+    <a class="breadcrumb__link" [routerLink]="['/employees', record.id]">{{ record.fullName }}</a>
+    <span class="breadcrumb__separator" aria-hidden="true">/</span>
+  }
+  <span>Assign package</span>
+</nav>
+
+@if (loadError(); as message) {
+  <p class="alert alert--error" role="alert">{{ message }}</p>
+}
+
+@if (employee(); as record) {
+  <header class="page-header">
+    <div>
+      <h1 class="page-header__title">Assign a compensation package</h1>
+      <p class="page-header__subtitle">
+        {{ record.fullName }} · {{ record.grade.label }} · joined
+        {{ record.dateOfJoining | isoDate }}
+      </p>
+    </div>
+  </header>
+
+  @if (currentPackage(); as inForce) {
+    <!--
+      Seeding from the package in force makes a raise a small edit rather than a re-entry
+      of six figures. Saying so matters: otherwise the pre-filled numbers look like
+      defaults rather than this employee's current pay.
+    -->
+    <p class="alert alert--info" role="note">
+      Pre-filled from the package in force since
+      {{ inForce.effectiveFrom | isoDate }}. Saving creates a new revision and supersedes
+      it — nothing is overwritten.
+    </p>
+  }
+
+  <form class="assign" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+    <div class="assign__main">
+      <section class="card assign__section">
+        <h2 class="assign__section-title">Effective from</h2>
+        <div class="field assign__date">
+          <label class="field__label" for="effectiveFrom">
+            The day this package takes effect
+          </label>
+          <input
+            id="effectiveFrom"
+            class="input"
+            [class.input--invalid]="effectiveFromMessage()"
+            type="date"
+            formControlName="effectiveFrom"
+            required
+            [attr.aria-invalid]="!!effectiveFromMessage()"
+            [attr.aria-describedby]="effectiveFromMessage() ? 'effectiveFrom-error' : null"
+          />
+          @if (effectiveFromMessage(); as message) {
+            <!-- The server's own message: it knows the joining date and the leaver rule. -->
+            <p class="field__error" id="effectiveFrom-error">{{ message }}</p>
+          }
+        </div>
+      </section>
+
+      <section class="card assign__section">
+        <h2 class="assign__section-title">Earnings</h2>
+        <p class="assign__hint">
+          A package must include a positive <span class="code">BASIC</span>; percentage
+          components are computed against it.
+        </p>
+        <ul class="rows">
+          @for (definition of earnings(); track definition.id) {
+            <li class="rows__row" [formGroup]="rowFor(definition.id)">
+              <label class="rows__include" [attr.for]="'include-' + definition.id">
+                <input
+                  type="checkbox"
+                  [id]="'include-' + definition.id"
+                  formControlName="included"
+                />
+                <span class="rows__name">
+                  {{ definition.name }}
+                  <span class="rows__code code">{{ definition.code }}</span>
+                </span>
+              </label>
+              <div class="rows__value">
+                <label class="visually-hidden" [attr.for]="'value-' + definition.id">
+                  {{ definition.name }} value
+                </label>
+                <input
+                  class="input rows__input numeric"
+                  [class.rows__input--unused]="!isIncluded(definition.id)"
+                  [id]="'value-' + definition.id"
+                  type="text"
+                  inputmode="decimal"
+                  autocomplete="off"
+                  formControlName="value"
+                />
+                <span class="rows__unit">{{ unitFor(definition) }}</span>
+              </div>
+            </li>
+          }
+        </ul>
+      </section>
+
+      <section class="card assign__section">
+        <h2 class="assign__section-title">Deductions</h2>
+        <ul class="rows">
+          @for (definition of deductions(); track definition.id) {
+            <li class="rows__row" [formGroup]="rowFor(definition.id)">
+              <label class="rows__include" [attr.for]="'include-' + definition.id">
+                <input
+                  type="checkbox"
+                  [id]="'include-' + definition.id"
+                  formControlName="included"
+                />
+                <span class="rows__name">
+                  {{ definition.name }}
+                  <span class="rows__code code">{{ definition.code }}</span>
+                </span>
+              </label>
+              <div class="rows__value">
+                <label class="visually-hidden" [attr.for]="'value-' + definition.id">
+                  {{ definition.name }} value
+                </label>
+                <input
+                  class="input rows__input numeric"
+                  [class.rows__input--unused]="!isIncluded(definition.id)"
+                  [id]="'value-' + definition.id"
+                  type="text"
+                  inputmode="decimal"
+                  autocomplete="off"
+                  formControlName="value"
+                />
+                <span class="rows__unit">{{ unitFor(definition) }}</span>
+              </div>
+            </li>
+          }
+        </ul>
+      </section>
+
+      @if (requiresOverride()) {
+        <!--
+          Appears only because the server refused the preview and named this field. A
+          package outside the grade band is allowed, but has to be a decision somebody
+          writes down — the reason is stored on the revision and in the audit trail.
+        -->
+        <section class="card assign__section assign__section--override">
+          <h2 class="assign__section-title">Override reason required</h2>
+          <p class="alert alert--warning" role="alert">{{ overrideMessage() }}</p>
+          <div class="field">
+            <label class="field__label" for="overrideReason">
+              Why is this package being approved outside the band?
+            </label>
+            <textarea
+              id="overrideReason"
+              class="input"
+              formControlName="overrideReason"
+              rows="3"
+              maxlength="500"
+            ></textarea>
+            <p class="field__hint">
+              Stored on the revision and in the audit trail. Up to 500 characters.
+            </p>
+          </div>
+        </section>
+      }
+    </div>
+
+    <!--
+      The live preview. Every figure here is the server's: the form sends the package to
+      POST …/preview on each edit and shows what comes back, because components are
+      rounded individually before summing and a browser-side total would disagree with
+      what gets saved.
+    -->
+    <aside class="card assign__preview" aria-labelledby="preview-heading">
+      <h2 class="assign__section-title" id="preview-heading">What this comes to</h2>
+
+      <!-- Polite, so a screen reader hears the new figures without interrupting typing. -->
+      <div aria-live="polite">
+        @if (totals(); as costed) {
+          <dl class="totals">
+            <div class="totals__item">
+              <dt class="totals__label">Basic</dt>
+              <dd class="totals__value numeric">{{ costed.basicMonthly | money }}</dd>
+            </div>
+            <div class="totals__item">
+              <dt class="totals__label">Gross monthly</dt>
+              <dd class="totals__value numeric">{{ costed.grossMonthly | money }}</dd>
+            </div>
+            <div class="totals__item">
+              <dt class="totals__label">Deductions</dt>
+              <dd class="totals__value numeric">{{ costed.totalDeductions | money }}</dd>
+            </div>
+            <div class="totals__item totals__item--emphasis">
+              <dt class="totals__label">Net monthly</dt>
+              <dd class="totals__value numeric">{{ costed.netMonthly | money }}</dd>
+            </div>
+            <div class="totals__item">
+              <dt class="totals__label">Annual CTC</dt>
+              <dd class="totals__value numeric">{{ costed.annualCtc | money }}</dd>
+            </div>
+          </dl>
+          <p class="assign__preview-note">
+            Calculated by the server. These are the figures that will be saved.
+          </p>
+        } @else if (componentsMessage(); as message) {
+          <!-- A problem with the package itself: no BASIC, deductions above gross, and so on. -->
+          <p class="alert alert--error" role="alert">{{ message }}</p>
+        } @else if (requiresOverride()) {
+          <p class="assign__preview-empty">
+            Give a reason above and the package will be costed.
+          </p>
+        } @else {
+          <p class="assign__preview-empty">
+            Choose an effective date and at least one component to see what the package
+            comes to.
+          </p>
+        }
+      </div>
+
+      @if (previewing()) {
+        <p class="assign__preview-status" role="status">Costing…</p>
+      }
+
+      @if (saveFailure(); as failure) {
+        @if (!failure.messageFor('effectiveFrom')) {
+          <p class="alert alert--error" role="alert">{{ failure.message }}</p>
+        }
+      }
+
+      <div class="assign__actions">
+        <button
+          class="button button--primary"
+          type="submit"
+          [disabled]="!canSave()"
+          [attr.aria-describedby]="canSave() ? null : 'save-blocked'"
+        >
+          {{ saving() ? 'Saving…' : 'Assign package' }}
+        </button>
+        @if (employee(); as record) {
+          <a class="button button--secondary" [routerLink]="['/employees', record.id]">Cancel</a>
+        }
+      </div>
+
+      @if (!canSave()) {
+        <!--
+          Saving waits on a successful preview on purpose: without one there is no evidence
+          the assignment would be accepted, and FR-4.5 exists so nobody commits to a
+          package sight unseen.
+        -->
+        <p class="assign__preview-empty" id="save-blocked">
+          The package has to cost successfully before it can be saved.
+        </p>
+      }
+    </aside>
+  </form>
+} @else if (!loading() && !loadError()) {
+  <p class="alert alert--error" role="alert">This employee could not be found.</p>
+}

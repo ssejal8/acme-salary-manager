@@ -1,0 +1,215 @@
+.compensation {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-top: var(--space-5);
+}
+
+.compensation__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.compensation__heading {
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+
+/* An anchor styled as a button still needs its underline removed. */
+.compensation__header .button {
+  text-decoration: none;
+}
+
+.compensation__locked {
+  margin: 0;
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+.package {
+  padding: var(--space-4);
+}
+
+/* The package in force is the thing most readers came for, so it is given weight. */
+.package--current {
+  border-left: 3px solid var(--colour-accent);
+}
+
+.package__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.package__title {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.package__dates {
+  margin: 0;
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+.package__summary {
+  /* Not .numeric's right alignment: this sits inline in a header, not in a column. */
+  margin: var(--space-1) 0 0;
+  font-size: 0.875rem;
+  text-align: left;
+}
+
+.package__override {
+  margin: var(--space-3) 0 0;
+}
+
+.package__override-label {
+  font-weight: 700;
+}
+
+.package__recorded {
+  margin: var(--space-3) 0 0;
+  color: var(--colour-text-muted);
+  font-size: 0.8125rem;
+}
+
+.package__body:empty {
+  display: none;
+}
+
+/**
+ * The headline figures. auto-fit keeps them one per row at 360px and spreads them across
+ * as space allows, without a breakpoint per figure count.
+ */
+.totals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--space-3);
+  margin: var(--space-4) 0 0;
+  padding: var(--space-3);
+  background: var(--colour-page);
+  border-radius: var(--radius-sm);
+}
+
+.totals__item {
+  min-width: 0;
+}
+
+.totals__label {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--colour-text-muted);
+}
+
+.totals__value {
+  margin: var(--space-1) 0 0;
+  /* Overrides .numeric's right alignment: these are labelled cards, not a column. */
+  text-align: left;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+/* Net pay is the figure an employee recognises, so it is the one that stands out. */
+.totals__item--emphasis .totals__value {
+  color: var(--colour-accent-dark);
+  font-size: 1.125rem;
+}
+
+.lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+.lines__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.lines__caption {
+  padding-bottom: var(--space-2);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--colour-text-muted);
+  text-align: left;
+}
+
+.lines__table th,
+.lines__table td {
+  padding: var(--space-2) var(--space-2);
+  border-bottom: 1px solid var(--colour-border);
+  text-align: left;
+}
+
+.lines__table thead th {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--colour-text-muted);
+}
+
+.lines__amount-header {
+  text-align: right;
+}
+
+.lines__component {
+  font-weight: 600;
+}
+
+.lines__code {
+  display: block;
+  color: var(--colour-text-muted);
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
+.lines__basis {
+  color: var(--colour-text-muted);
+  white-space: nowrap;
+}
+
+/* The subtotal, which is what makes the column checkable by hand. */
+.lines__table tfoot th,
+.lines__table tfoot td {
+  border-bottom: none;
+  border-top: 2px solid var(--colour-border-strong);
+  font-weight: 700;
+}
+
+.lines__note {
+  margin: var(--space-3) 0 0;
+  color: var(--colour-text-muted);
+  font-size: 0.8125rem;
+}
+
+.revisions__heading {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.revisions__note {
+  margin: var(--space-1) 0 var(--space-3);
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+.revisions__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}

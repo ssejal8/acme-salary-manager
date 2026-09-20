@@ -61,14 +61,23 @@
       </div>
     </dl>
 
-    <!--
-      Said plainly rather than left as a gap. Compensation is the thing a user most
-      expects on this screen, and an unexplained absence looks like a fault.
-    -->
-    <p class="detail__note">
-      Compensation, salary structure history and payslips are not part of this screen yet.
-    </p>
   </article>
+
+  <!--
+    Compensation is a separate concern on a separate endpoint, so it is a separate
+    component with its own loading and failure states — losing it must not cost the reader
+    the employee's record above.
+
+    Rendered only once the employee has loaded, so the id passed here is known to be real.
+  -->
+  <!--
+    canAssign reflects employment status: a leaver's compensation stays on record but
+    cannot be changed (FR-4.6), so the form is not offered for one.
+  -->
+  <app-salary-history [employeeId]="record.id" [canAssign]="record.status === 'ACTIVE'" />
+
+  <!-- Still missing, and said plainly rather than left as an unexplained gap. -->
+  <p class="detail__note">Payslips are not part of this screen yet.</p>
 } @else if (loaded() && !errorMessage()) {
   <p class="alert alert--error" role="alert">This employee could not be found.</p>
 }

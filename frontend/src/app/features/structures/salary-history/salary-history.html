@@ -1,0 +1,277 @@
+<section class="compensation" aria-labelledby="compensation-heading">
+  <header class="compensation__header">
+    <h2 class="compensation__heading" id="compensation-heading">Compensation</h2>
+    @if (canAssign()) {
+      <!--
+        Reads as a revision rather than an edit, because that is what it is: assigning
+        supersedes the current package instead of changing it (ADR-009).
+      -->
+      <a
+        class="button button--primary button--compact"
+        [routerLink]="['/employees', employeeId(), 'salary-structures', 'new']"
+      >
+        {{ current() ? 'Revise package' : 'Assign a package' }}
+      </a>
+    }
+  </header>
+
+  @if (!canAssign()) {
+    <p class="compensation__locked">
+      This employee has left, so their compensation is on record but cannot be changed.
+    </p>
+  }
+
+  @if (errorMessage(); as message) {
+    <p class="alert alert--error" role="alert">{{ message }}</p>
+  }
+
+  @if (hasNoPackage()) {
+    <!--
+      Not an error. Compensation analytics counts these employees as a coverage gap
+      (employeesWithoutPackage) rather than pricing them as zero, and a payroll run skips
+      them — so the wording points at the action rather than implying a fault.
+    -->
+    <div class="card">
+      <app-empty-state
+        title="No compensation package assigned"
+        hint="This employee is excluded from payroll and counts as a coverage gap until a package is assigned."
+      />
+    </div>
+  }
+
+  @if (current(); as inForce) {
+    <article class="card package package--current">
+      <header class="package__header">
+        <div>
+          <h3 class="package__title">Current package</h3>
+          <p class="package__dates">
+            Effective from {{ inForce.effectiveFrom | isoDate }}
+          </p>
+        </div>
+        <span class="badge badge--active">In force</span>
+      </header>
+
+      @if (inForce.overrideReason; as reason) {
+        <!--
+          Only present when the package was accepted outside the employee's grade CTC band
+          (FR-4.3). Its presence is the whole signal, so it is stated rather than tucked
+          into a tooltip.
+        -->
+        <p class="alert alert--warning package__override" role="note">
+          <span class="package__override-label">Approved outside the grade band:</span>
+          {{ reason }}
+        </p>
+      }
+
+      <!-- The figures a reader is usually after, before the line-by-line breakdown. -->
+      <dl class="totals">
+        <div class="totals__item">
+          <dt class="totals__label">Basic</dt>
+          <dd class="totals__value numeric">{{ inForce.totals.basicMonthly | money }}</dd>
+        </div>
+        <div class="totals__item">
+          <dt class="totals__label">Gross monthly</dt>
+          <dd class="totals__value numeric">{{ inForce.totals.grossMonthly | money }}</dd>
+        </div>
+        <div class="totals__item">
+          <dt class="totals__label">Deductions</dt>
+          <dd class="totals__value numeric">{{ inForce.totals.totalDeductions | money }}</dd>
+        </div>
+        <div class="totals__item totals__item--emphasis">
+          <dt class="totals__label">Net monthly</dt>
+          <dd class="totals__value numeric">{{ inForce.totals.netMonthly | money }}</dd>
+        </div>
+        <div class="totals__item">
+          <dt class="totals__label">Annual CTC</dt>
+          <dd class="totals__value numeric">{{ inForce.totals.annualCtc | money }}</dd>
+        </div>
+      </dl>
+
+      <ng-container
+        [ngTemplateOutlet]="lines"
+        [ngTemplateOutletContext]="{ structure: inForce }"
+      />
+    </article>
+  }
+
+  @if (superseded().length > 0) {
+    <section class="revisions" aria-labelledby="revisions-heading">
+      <h3 class="revisions__heading" id="revisions-heading">Earlier revisions</h3>
+      <!--
+        A package is never edited; assigning a new one supersedes the old (ADR-009). So
+        this is the compensation history, and payroll for an earlier month still resolves
+        to the revision that governed it.
+      -->
+      <p class="revisions__note">
+        Packages are superseded rather than overwritten, so payroll for an earlier month
+        still uses the revision that was in force then.
+      </p>
+
+      <ul class="revisions__list">
+        @for (revision of superseded(); track revision.id) {
+          <li class="card package package--superseded">
+            <header class="package__header">
+              <div>
+                <p class="package__dates">
+                  {{ revision.effectiveFrom | isoDate }} –
+                  {{ revision.supersededOn | isoDate }}
+                </p>
+                <p class="package__summary numeric">
+                  Gross {{ revision.totals.grossMonthly | money }} · Net
+                  {{ revision.totals.netMonthly | money }}
+                </p>
+              </div>
+              <button
+                type="button"
+                class="button button--secondary button--compact"
+                [attr.aria-expanded]="isExpanded(revision.id)"
+                [attr.aria-controls]="'revision-' + revision.id"
+                (click)="toggle(revision.id)"
+              >
+                {{ isExpanded(revision.id) ? 'Hide' : 'Show' }} breakdown
+              </button>
+            </header>
+
+            <div class="package__body" [id]="'revision-' + revision.id">
+              @if (isExpanded(revision.id)) {
+                @if (revision.overrideReason; as reason) {
+                  <p class="alert alert--warning package__override" role="note">
+                    <span class="package__override-label">Approved outside the grade band:</span>
+                    {{ reason }}
+                  </p>
+                }
+
+                <dl class="totals">
+                  <div class="totals__item">
+                    <dt class="totals__label">Basic</dt>
+                    <dd class="totals__value numeric">{{ revision.totals.basicMonthly | money }}</dd>
+                  </div>
+                  <div class="totals__item">
+                    <dt class="totals__label">Deductions</dt>
+                    <dd class="totals__value numeric">
+                      {{ revision.totals.totalDeductions | money }}
+                    </dd>
+                  </div>
+                  <div class="totals__item">
+                    <dt class="totals__label">Annual CTC</dt>
+                    <dd class="totals__value numeric">{{ revision.totals.annualCtc | money }}</dd>
+                  </div>
+                </dl>
+
+                <ng-container
+                  [ngTemplateOutlet]="lines"
+                  [ngTemplateOutletContext]="{ structure: revision }"
+                />
+
+                <!--
+                  DatePipe is correct here, unlike for effectiveFrom: createdAt is a true
+                  instant, so rendering it in the viewer's timezone is the right thing.
+                  effectiveFrom is a calendar date and must not go near a Date object.
+                -->
+                <p class="package__recorded">
+                  Recorded {{ revision.createdAt | date: 'd MMM y, HH:mm' }}
+                </p>
+              }
+            </div>
+          </li>
+        }
+      </ul>
+    </section>
+  }
+</section>
+
+<!--
+  One breakdown template, used by the current package and by each expanded revision. The
+  two present identical information and should not drift apart.
+-->
+<ng-template #lines let-structure="structure">
+  <div class="lines">
+    @if (structure.earnings.length > 0) {
+      <table class="lines__table">
+        <caption class="lines__caption">
+          Earnings
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">Component</th>
+            <th scope="col">Basis</th>
+            <th scope="col" class="lines__amount-header">Monthly</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (component of structure.earnings; track component.componentId) {
+            <tr>
+              <th scope="row" class="lines__component">
+                {{ component.name }}
+                <span class="lines__code code">{{ component.code }}</span>
+              </th>
+              <td class="lines__basis">
+                @if (isPercentage(component)) {
+                  {{ component.configuredValue | percentage }} {{ basisOf(component) }}
+                } @else {
+                  {{ basisOf(component) }}
+                }
+              </td>
+              <td class="numeric">{{ component.monthlyAmount | money }}</td>
+            </tr>
+          }
+        </tbody>
+        <tfoot>
+          <tr>
+            <th scope="row" colspan="2">Gross monthly</th>
+            <td class="numeric">{{ structure.totals.grossMonthly | money }}</td>
+          </tr>
+        </tfoot>
+      </table>
+    }
+
+    @if (structure.deductions.length > 0) {
+      <table class="lines__table">
+        <caption class="lines__caption">
+          Deductions
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">Component</th>
+            <th scope="col">Basis</th>
+            <th scope="col" class="lines__amount-header">Monthly</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (component of structure.deductions; track component.componentId) {
+            <tr>
+              <th scope="row" class="lines__component">
+                {{ component.name }}
+                <span class="lines__code code">{{ component.code }}</span>
+              </th>
+              <td class="lines__basis">
+                @if (isPercentage(component)) {
+                  {{ component.configuredValue | percentage }} {{ basisOf(component) }}
+                } @else {
+                  {{ basisOf(component) }}
+                }
+              </td>
+              <td class="numeric">{{ component.monthlyAmount | money }}</td>
+            </tr>
+          }
+        </tbody>
+        <tfoot>
+          <tr>
+            <th scope="row" colspan="2">Total deductions</th>
+            <td class="numeric">{{ structure.totals.totalDeductions | money }}</td>
+          </tr>
+        </tfoot>
+      </table>
+    }
+  </div>
+
+  <!--
+    Worth stating, because it is the reason the columns can be checked by hand: each
+    component is rounded before anything is summed, so the lines add up to the totals
+    exactly rather than to within a rounding error.
+  -->
+  <p class="lines__note">
+    Each component is rounded before the totals are summed, so the lines above add up
+    exactly. All figures are calculated by the server.
+  </p>
+</ng-template>

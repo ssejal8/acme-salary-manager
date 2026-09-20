@@ -1,4 +1,4 @@
-import { CURRENCY_SYMBOL, formatAmount, formatMoney } from './money';
+import { CURRENCY_SYMBOL, formatAmount, formatMoney, formatPercentage } from './money';
 
 /**
  * These tests are the guard on architecture §6.3: amounts are never parsed into a
@@ -87,6 +87,49 @@ describe('money formatting', () => {
       expect(formatAmount('1,000.00')).toBe('1,000.00');
       expect(formatAmount('not-a-number')).toBe('not-a-number');
       expect(formatAmount('NaN')).toBe('NaN');
+    });
+  });
+
+  /**
+   * A percentage is not money, and conflating the two would be a visible bug: a
+   * PERCENT_OF_BASIC component's `configuredValue` of `12.00` means twelve per cent, so
+   * rendering it through the money formatter would show `₹12.00` for what is actually a
+   * deduction of several thousand.
+   */
+  describe('percentages', () => {
+    it('never carries a currency symbol', () => {
+      expect(formatPercentage('12.00')).not.toContain(CURRENCY_SYMBOL);
+    });
+
+    it('trims trailing zeros, because a rate carries no precision promise', () => {
+      // 12.00% and 12% are the same rate. This is the opposite of formatAmount, which
+      // pads to two places — and safe here only because no total is derived from the
+      // displayed rate.
+      expect(formatPercentage('12.00')).toBe('12%');
+      expect(formatPercentage('12.50')).toBe('12.5%');
+      expect(formatPercentage('0.50')).toBe('0.5%');
+      expect(formatPercentage('12.05')).toBe('12.05%');
+    });
+
+    it('handles a whole number and a zero rate', () => {
+      expect(formatPercentage('12')).toBe('12%');
+      expect(formatPercentage('0.00')).toBe('0%');
+      expect(formatPercentage('100.00')).toBe('100%');
+    });
+
+    it('does not group a rate, which is never large enough to need it', () => {
+      expect(formatPercentage('100')).toBe('100%');
+    });
+
+    it('shows a dash for an absent rate', () => {
+      expect(formatPercentage(null)).toBe('—');
+      expect(formatPercentage(undefined)).toBe('—');
+      expect(formatPercentage('')).toBe('—');
+      expect(formatPercentage('  ')).toBe('—');
+    });
+
+    it('passes through anything that is not a plain decimal', () => {
+      expect(formatPercentage('twelve')).toBe('twelve');
     });
   });
 });

@@ -41,6 +41,19 @@ export class Shell {
       label: 'Employees',
       available: this.auth.canManageEmployees(),
     },
+    {
+      path: '/reports/compensation',
+      label: 'Compensation',
+      available: this.auth.canManageEmployees(),
+    },
+    {
+      // Reading definitions is ADMIN/HR; only ADMIN may add one, which the screen itself
+      // reflects. Hiding the whole area from HR would hide the vocabulary their own
+      // packages are built from.
+      path: '/salary-components',
+      label: 'Components',
+      available: this.auth.canManageEmployees(),
+    },
   ]);
 
   readonly visibleNavItems = computed(() => this.navItems().filter((item) => item.available));

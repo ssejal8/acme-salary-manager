@@ -299,9 +299,21 @@ frontend/src/app/
     └── reports/        register, department cost, dashboard
 ```
 
-Built so far: `core/` in full, `shared/` for money, dates, the paging contract and the
-empty state, and `features/auth/login` plus `features/employees` (list and detail). The
-remaining feature areas are directories in this plan, not yet on disk.
+Built so far: `core/` in full, `shared/`, `features/auth/login`, `features/employees`
+(list and detail), `features/structures` in full (history *and* the assignment form),
+`features/components` (definitions, create gated to ADMIN) and `features/reports` (the
+compensation dashboard). `features/payroll` and `features/payslips` are directories in this
+plan only — their endpoints do not exist. So is `features/auth/change-password`.
+
+`features/components` and `features/reports` are not in the original sketch above, which
+listed component definitions under reference data and folded the dashboard into `reports`.
+They are separate areas because each is a screen with its own route and service.
+
+`features/structures/salary-history` is rendered *by* the employee detail screen rather
+than reached by its own route. It stays a separate component on a separate endpoint with
+its own loading and failure states, so losing compensation — a read with stricter reasons
+to fail — does not cost the reader the employee's record. Compensation is also the thing a
+user opens an employee for, so putting it behind another click would be worse.
 
 Reference data sits in `core/` rather than under a feature because three screens will
 need the same three lists and none of them owns them. It deliberately does **not** cache:
@@ -387,6 +399,15 @@ server on save.
 of the string, so no `Number` is ever constructed and the characters displayed are the
 characters the server sent. It is more code than `Intl.NumberFormat` would be, and that is
 the cost of the rule rather than an argument against it.
+
+A **percentage is formatted separately**, and the distinction is not cosmetic. A
+`PERCENT_OF_BASIC` component's `configuredValue` is `"12.00"` meaning twelve per cent, so
+putting it through the money formatter would render `₹12.00` for what is in fact a
+nine-thousand-rupee deduction. `formatPercentage` therefore trims trailing zeros where
+`formatAmount` pads them — `12.00%` and `12%` are the same rate, whereas `₹12` and `₹12.00`
+differ in what they promise about precision. Trimming is safe only because no total is
+derived from a displayed rate: the server has already applied it and sent the resulting
+amount.
 
 Calendar dates get the same treatment in `shared/dates.ts`, for a sharper reason. A
 `LocalDate` arrives as `"2022-06-01"`, and per the ECMAScript spec `new Date("2022-06-01")`

@@ -1,0 +1,231 @@
+.breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+.breadcrumb__link {
+  color: var(--colour-accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.breadcrumb__link:hover {
+  text-decoration: underline;
+}
+
+.page-header {
+  margin-bottom: var(--space-4);
+}
+
+.page-header__title {
+  font-size: 1.375rem;
+  font-weight: 700;
+}
+
+.page-header__subtitle {
+  margin: var(--space-1) 0 0;
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+/**
+ * One column below the breakpoint, form beside preview above it. The preview is `sticky`
+ * on wide screens so the figures stay in view while the rows below are edited — the whole
+ * point of a live preview is not having to scroll back to it.
+ */
+.assign {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-4);
+  align-items: start;
+  margin-top: var(--space-4);
+}
+
+.assign__main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.assign__section {
+  padding: var(--space-4);
+}
+
+.assign__section--override {
+  border-left: 3px solid var(--colour-warning);
+}
+
+.assign__section-title {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.assign__hint {
+  margin: var(--space-1) 0 var(--space-3);
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+.assign__date {
+  max-width: 16rem;
+  margin-top: var(--space-3);
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rows__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--colour-border);
+}
+
+.rows__row:last-child {
+  border-bottom: none;
+}
+
+/* The label wraps the checkbox, so the component name is part of the hit target. */
+.rows__include {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  cursor: pointer;
+}
+
+.rows__include input[type='checkbox'] {
+  width: 1.125rem;
+  height: 1.125rem;
+  flex-shrink: 0;
+  accent-color: var(--colour-accent);
+  cursor: pointer;
+}
+
+.rows__name {
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.rows__code {
+  display: block;
+  color: var(--colour-text-muted);
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
+.rows__value {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.rows__input {
+  width: 9rem;
+}
+
+/**
+ * A row that is not included. The value stays readable — it is the figure that would apply
+ * if the row were ticked — but is clearly not in play.
+ */
+.rows__input--unused {
+  opacity: 0.55;
+}
+
+.rows__unit {
+  color: var(--colour-text-muted);
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+.assign__preview {
+  padding: var(--space-4);
+}
+
+.assign__preview-note,
+.assign__preview-empty {
+  margin: var(--space-3) 0 0;
+  color: var(--colour-text-muted);
+  font-size: 0.8125rem;
+}
+
+.assign__preview-status {
+  margin: var(--space-2) 0 0;
+  color: var(--colour-text-muted);
+  font-size: 0.8125rem;
+}
+
+.assign__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.assign__actions .button {
+  flex: 1 1 auto;
+  text-decoration: none;
+}
+
+/* Shared with the salary history screen; duplicated because component styles are scoped. */
+.totals {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+  margin: var(--space-3) 0 0;
+  padding: var(--space-3);
+  background: var(--colour-page);
+  border-radius: var(--radius-sm);
+}
+
+.totals__item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.totals__label {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--colour-text-muted);
+}
+
+.totals__value {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.totals__item--emphasis .totals__value {
+  color: var(--colour-accent-dark);
+  font-size: 1.125rem;
+}
+
+@media (min-width: 60rem) {
+  .assign {
+    grid-template-columns: minmax(0, 1fr) 20rem;
+  }
+
+  .assign__preview {
+    position: sticky;
+    top: var(--space-4);
+  }
+}

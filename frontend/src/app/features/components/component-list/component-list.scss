@@ -1,0 +1,156 @@
+.page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.page-header__title {
+  font-size: 1.375rem;
+  font-weight: 700;
+}
+
+.page-header__subtitle {
+  margin: var(--space-1) 0 0;
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+.section,
+.create,
+.filters {
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.section__title {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.section__note {
+  margin: var(--space-1) 0 0;
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+.create {
+  border-left: 3px solid var(--colour-accent);
+}
+
+/* auto-fit keeps this one column at 360px and fills the row as space allows. */
+.create__form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.create__value {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.create__unit {
+  color: var(--colour-text-muted);
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+.create__taxable {
+  justify-content: flex-end;
+}
+
+.create__checkbox,
+.filters__toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  cursor: pointer;
+  font-size: 0.9375rem;
+}
+
+.create__checkbox input,
+.filters__toggle input {
+  width: 1.125rem;
+  height: 1.125rem;
+  flex-shrink: 0;
+  accent-color: var(--colour-accent);
+  cursor: pointer;
+}
+
+.filters__hint {
+  display: block;
+  color: var(--colour-text-muted);
+  font-size: 0.8125rem;
+}
+
+.create__actions {
+  display: flex;
+  align-items: flex-end;
+  grid-column: 1 / -1;
+}
+
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-top: var(--space-3);
+}
+
+.components {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+}
+
+.components th,
+.components td {
+  padding: var(--space-3);
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--colour-border);
+}
+
+.components tbody tr:last-child th,
+.components tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.components thead th {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--colour-text-muted);
+}
+
+.components__value {
+  text-align: right;
+}
+
+.components__name {
+  font-weight: 600;
+}
+
+.components__code {
+  display: block;
+  color: var(--colour-text-muted);
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
+.components__calculation {
+  color: var(--colour-text-muted);
+}
+
+/**
+ * A retired component is muted but still legible: a historical payslip references it, so
+ * it must not look like it was deleted.
+ */
+.components__row--retired .components__name,
+.components__row--retired td {
+  opacity: 0.7;
+}

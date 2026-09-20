@@ -1,0 +1,228 @@
+<header class="page-header">
+  <div>
+    <h1 class="page-header__title">Salary components</h1>
+    <p class="page-header__subtitle">
+      The earnings and deductions every compensation package is built from.
+    </p>
+  </div>
+  @if (canCreate()) {
+    <button
+      type="button"
+      class="button button--primary button--compact"
+      [attr.aria-expanded]="formOpen()"
+      aria-controls="create-component"
+      (click)="toggleForm()"
+    >
+      {{ formOpen() ? 'Cancel' : 'Define a component' }}
+    </button>
+  }
+</header>
+
+@if (errorMessage(); as message) {
+  <p class="alert alert--error" role="alert">{{ message }}</p>
+}
+
+@if (createdCode(); as code) {
+  <p class="alert alert--info" role="status">
+    <strong>{{ code }}</strong> is defined and can now be added to a package.
+  </p>
+}
+
+@if (canCreate() && formOpen()) {
+  <section class="card create" id="create-component" aria-labelledby="create-heading">
+    <h2 class="section__title" id="create-heading">Define a component</h2>
+    <p class="section__note">
+      A component changes what payroll computes for everyone, so it cannot be deleted once
+      defined — only retired.
+    </p>
+
+    @if (createFailure(); as failure) {
+      @if (!failure.hasFieldErrors) {
+        <p class="alert alert--error" role="alert">{{ failure.message }}</p>
+      }
+    }
+
+    <form class="create__form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+      <div class="field">
+        <label class="field__label" for="code">Code</label>
+        <input
+          id="code"
+          class="input code"
+          [class.input--invalid]="fieldError('code')"
+          type="text"
+          formControlName="code"
+          maxlength="30"
+          autocapitalize="characters"
+          autocomplete="off"
+          required
+          [attr.aria-invalid]="!!fieldError('code')"
+          [attr.aria-describedby]="fieldError('code') ? 'code-error' : 'code-hint'"
+        />
+        @if (fieldError('code'); as message) {
+          <p class="field__error" id="code-error">{{ message }}</p>
+        } @else {
+          <p class="field__hint" id="code-hint">
+            Stored uppercased and referenced in reports. Must be unique.
+          </p>
+        }
+      </div>
+
+      <div class="field">
+        <label class="field__label" for="name">Name</label>
+        <input
+          id="name"
+          class="input"
+          [class.input--invalid]="fieldError('name')"
+          type="text"
+          formControlName="name"
+          maxlength="120"
+          required
+          [attr.aria-invalid]="!!fieldError('name')"
+          [attr.aria-describedby]="fieldError('name') ? 'name-error' : null"
+        />
+        @if (fieldError('name'); as message) {
+          <p class="field__error" id="name-error">{{ message }}</p>
+        }
+      </div>
+
+      <div class="field">
+        <label class="field__label" for="type">Type</label>
+        <select id="type" class="select" formControlName="type">
+          @for (type of componentTypes; track type) {
+            <option [value]="type">{{ componentTypeLabel(type) }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="field">
+        <label class="field__label" for="calculationType">Calculation</label>
+        <select id="calculationType" class="select" formControlName="calculationType">
+          @for (calculation of calculationTypes; track calculation) {
+            <option [value]="calculation">{{ calculationTypeLabel(calculation) }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="field">
+        <label class="field__label" for="value">Default value</label>
+        <div class="create__value">
+          <input
+            id="value"
+            class="input numeric"
+            [class.input--invalid]="fieldError('value')"
+            type="text"
+            inputmode="decimal"
+            formControlName="value"
+            autocomplete="off"
+            required
+            [attr.aria-invalid]="!!fieldError('value')"
+            [attr.aria-describedby]="fieldError('value') ? 'value-error' : null"
+          />
+          <!-- The unit follows the calculation type, so the number is never ambiguous. -->
+          <span class="create__unit">{{ valueUnit() }}</span>
+        </div>
+        @if (fieldError('value'); as message) {
+          <p class="field__error" id="value-error">{{ message }}</p>
+        }
+      </div>
+
+      <div class="field create__taxable">
+        <label class="create__checkbox" for="taxable">
+          <input id="taxable" type="checkbox" formControlName="taxable" />
+          <span>Taxable</span>
+        </label>
+      </div>
+
+      <div class="create__actions">
+        <button class="button button--primary" type="submit" [disabled]="creating()">
+          {{ creating() ? 'Saving…' : 'Define component' }}
+        </button>
+      </div>
+    </form>
+  </section>
+}
+
+<div class="filters card">
+  <label class="filters__toggle" for="include-inactive">
+    <input
+      id="include-inactive"
+      type="checkbox"
+      [checked]="includeInactive()"
+      (change)="toggleInactive($any($event.target).checked)"
+    />
+    <span>
+      Show retired components
+      <span class="filters__hint">
+        Still valid on packages that use them, but cannot be added to a new one.
+      </span>
+    </span>
+  </label>
+</div>
+
+@if (loaded() && definitions().length === 0) {
+  <div class="card">
+    <app-empty-state
+      title="No components are defined"
+      hint="A package is built from these, so at least a BASIC earning is needed before one can be assigned."
+    />
+  </div>
+}
+
+<ng-container
+  [ngTemplateOutlet]="group"
+  [ngTemplateOutletContext]="{ heading: 'Earnings', definitions: earnings() }"
+/>
+<ng-container
+  [ngTemplateOutlet]="group"
+  [ngTemplateOutletContext]="{ heading: 'Deductions', definitions: deductions() }"
+/>
+
+<ng-template #group let-heading="heading" let-definitions="definitions">
+  @if (definitions.length > 0) {
+    <section class="card section" [attr.aria-label]="heading">
+      <h2 class="section__title">{{ heading }}</h2>
+      <div class="table-scroll" tabindex="0" role="region" [attr.aria-label]="heading + ' table'">
+        <table class="components">
+          <thead>
+            <tr>
+              <th scope="col">Component</th>
+              <th scope="col">Calculation</th>
+              <th scope="col" class="components__value">Default</th>
+              <th scope="col">Taxable</th>
+              <th scope="col">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (definition of definitions; track definition.id) {
+              <tr [class.components__row--retired]="!definition.active">
+                <th scope="row" class="components__name">
+                  {{ definition.name }}
+                  <span class="components__code code">{{ definition.code }}</span>
+                </th>
+                <td class="components__calculation">
+                  {{ calculationTypeLabel(definition.calculationType) }}
+                </td>
+                <td class="numeric">
+                  <!-- A percentage must never carry a currency symbol. -->
+                  @if (isPercentage(definition)) {
+                    {{ definition.value | percentage }}
+                  } @else {
+                    {{ definition.value | money }}
+                  }
+                </td>
+                <td>{{ definition.taxable ? 'Yes' : 'No' }}</td>
+                <td>
+                  @if (definition.active) {
+                    <span class="badge badge--active">Active</span>
+                  } @else {
+                    <span class="badge badge--inactive">Retired</span>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+</ng-template>
