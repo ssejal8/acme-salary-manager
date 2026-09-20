@@ -1,5 +1,5 @@
 import { inject } from '@angular/core';
-import { CanActivateFn, Router, UrlTree } from '@angular/router';
+import { CanActivateFn, RedirectFunction, Router, UrlTree } from '@angular/router';
 import { Role } from './auth.models';
 import { AuthService } from './auth.service';
 
@@ -53,3 +53,16 @@ export function roleGuard(...allowed: Role[]): CanActivateFn {
     return auth.hasAnyRole(...allowed) ? true : router.createUrlTree(['/not-authorised']);
   };
 }
+
+/**
+ * Where a signed-in user lands when they open the application root.
+ *
+ * Role-aware, because a fixed target was a bug rather than a simplification: every screen
+ * used to be ADMIN/HR, so an EMPLOYEE authenticated successfully and was then bounced to
+ * the no-access page — a dead end for one of the three roles the system has.
+ *
+ * ADMIN and HR go to the employee list, which is their working screen. Everyone else goes
+ * to their own payslips, which is theirs.
+ */
+export const landingRedirect: RedirectFunction = () =>
+  inject(AuthService).canManageEmployees() ? '/employees' : '/payslips';

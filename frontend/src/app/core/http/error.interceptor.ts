@@ -58,9 +58,14 @@ function asApiErrorBody(body: unknown): ApiErrorBody | null {
 function fallbackMessage(status: number): string {
   switch (status) {
     case 0:
-      // Status 0 is not a server response: the request never completed. Almost always the
-      // API is not running, which during development is the single most common failure.
-      return 'Could not reach the server. Check that the API is running.';
+      // Not a server response at all: the request never completed — a dropped
+      // connection, DNS failure, or a blocked request.
+      //
+      // Note this is *not* the path taken when the API is merely down in development.
+      // The dev-server proxy answers that with a 502 carrying an ApiError envelope (see
+      // `proxy.conf.mjs`), precisely so the message names the real cause rather than
+      // falling back to something generic here.
+      return 'Could not reach the server. Check your connection.';
     case 401:
       return 'Your session has ended. Please sign in again.';
     case 403:

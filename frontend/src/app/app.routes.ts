@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { authGuard, roleGuard } from './core/auth/auth.guard';
+import { authGuard, landingRedirect, roleGuard } from './core/auth/auth.guard';
 
 /**
  * Application routes.
@@ -26,7 +26,8 @@ export const routes: Routes = [
       {
         path: '',
         pathMatch: 'full',
-        redirectTo: 'employees',
+        // Role-aware: see landingRedirect for why a fixed target was a dead end.
+        redirectTo: landingRedirect,
       },
       {
         path: 'employees',
@@ -62,6 +63,35 @@ export const routes: Routes = [
               ),
           },
         ],
+      },
+      {
+        // Every authenticated role, with no roleGuard: "my own data" is not a privilege
+        // to withhold, and an HR user on the payroll has payslips of their own. Which
+        // rows each caller may have is the API's decision, enforced per record.
+        path: 'payslips',
+        title: 'My payslips · ACME Salary Management',
+        loadComponent: () =>
+          import('./features/payslips/my-payslips/my-payslips').then((m) => m.MyPayslips),
+      },
+      {
+        path: 'payslips/:id',
+        title: 'Payslip · ACME Salary Management',
+        loadComponent: () =>
+          import('./features/payslips/payslip-view/payslip-view').then((m) => m.PayslipView),
+      },
+      {
+        // ADMIN/HR, matching the endpoint: a draft run holds every salary in the
+        // organisation, so this is not a screen to leave reachable by an employee.
+        //
+        // `payroll-runs/new` rather than `payroll-runs`, because starting a run is not
+        // the collection: the list and the review screen belong on the paths the API
+        // already uses for them, and taking the bare path for a form would mean moving it
+        // later.
+        path: 'payroll-runs/new',
+        title: 'Run payroll · ACME Salary Management',
+        canActivate: [roleGuard('ADMIN', 'HR')],
+        loadComponent: () =>
+          import('./features/payroll/start-run/start-run').then((m) => m.StartRun),
       },
       {
         path: 'reports/compensation',

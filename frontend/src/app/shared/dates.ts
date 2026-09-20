@@ -49,6 +49,51 @@ export function formatIsoDate(date: string | null | undefined, fallback = '—')
   return monthName ? `${Number(day)} ${monthName} ${year}` : date;
 }
 
+/** Full month names, for a period heading where the abbreviation reads as clipped. */
+const FULL_MONTHS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+
+/**
+ * The name of a 1-based month, or an empty string if there is no such month.
+ *
+ * Exists so a month picker and a period heading spell a month the same way, rather than
+ * one of them carrying a second list that could drift from this one.
+ */
+export function monthName(month: number): string {
+  return FULL_MONTHS[month - 1] ?? '';
+}
+
+/**
+ * Formats a payroll period as `April 2026`.
+ *
+ * Takes the year and month as numbers rather than parsing the API's `"2026-04"`, because
+ * they arrive as numbers too and a period is not a date — it has no day, so there is
+ * nothing a `Date` could correctly represent.
+ */
+export function formatPeriod(year: number, month: number): string {
+  const name = FULL_MONTHS[month - 1];
+  return name ? `${name} ${year}` : `${year}-${String(month).padStart(2, '0')}`;
+}
+
+@Pipe({ name: 'period' })
+export class PeriodPipe implements PipeTransform {
+  transform(value: { periodYear: number; periodMonth: number }): string {
+    return formatPeriod(value.periodYear, value.periodMonth);
+  }
+}
+
 @Pipe({ name: 'isoDate' })
 export class IsoDatePipe implements PipeTransform {
   transform(date: string | null | undefined, fallback = '—'): string {

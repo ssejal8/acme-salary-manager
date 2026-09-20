@@ -11,9 +11,9 @@ npm run lint       # ESLint over TypeScript and templates
 npm run build      # production bundle into dist/
 ```
 
-The backend must be running for any screen to load data. Without it, requests fail with
-"Could not reach the server" — which is the error interceptor doing its job, not a
-frontend fault.
+The backend must be running for any screen to load data. Without it the dev proxy answers
+502 and the SPA says "Could not reach the API at http://localhost:8080. Is it running?" —
+which is the plumbing working, not a frontend fault.
 
 ## What is built
 
@@ -21,17 +21,24 @@ Every screen whose API exists: login, the shell with role-aware navigation, the 
 role guards, the three HTTP interceptors, the employee list (server-side paging, filtering
 and sorting, state in the URL), the employee record with its compensation and revision
 history, the package assignment form with a live server-side preview, the compensation
-dashboard, and the salary component definitions.
+dashboard, the salary component definitions, and starting a payroll run.
 
-Not built because the endpoints do not exist: payroll runs, payslips, employee
-create/update/deactivate, employee self-service (`/me`), change password, audit trail.
-**An EMPLOYEE has no usable screen** for the same reason.
+Plus the EMPLOYEE screens: their own payslip list and a payslip view, with a role-aware
+landing so all three roles arrive somewhere useful.
 
-Not built: the salary structure **assignment** form (the write half — preview, grade-band
-override, supersede), the compensation dashboard, payroll and payslips.
+Not built: the rest of the payroll cycle — the run list, the draft review with loss-of-pay
+adjustments, finalise and cancel all exist on the API and have no screen, so a month is
+still published with curl. Also missing: payslip PDF export, the HR-facing payslip list,
+employee create/update/deactivate, change password, and the audit trail.
 
 ## Things that will look wrong until you know why
 
+- **The dev proxy is `proxy.conf.mjs`, not JSON, and that matters.** Vite answers a
+  refused upstream connection with **500**, so with the API simply not running the SPA used
+  to report "Something went wrong on the server" for a server that was not there. The
+  handler now returns **502** with an `ApiError` envelope naming the real cause, which is
+  why the file has to be a module. The interceptor's `status === 0` branch is for a genuine
+  network failure, not for this.
 - **`.npmrc` sets `legacy-peer-deps=true`.** npm 10.9.x crashes resolving Vitest's peer
   graph. Not a dependency conflict in this project; delete the file on npm 11.
 - **Money is formatted from strings, never parsed.** `shared/money.ts` groups thousands
@@ -70,6 +77,15 @@ override, supersede), the compensation dashboard, payroll and payslips.
 - **A `computed()` over a `FormControl.value` never recomputes** — a control's value is not
   a signal. Bridge it with `toSignal(control.valueChanges)`. This was a real bug in the
   component form's unit label, caught by a test.
+- **A `<select>` bound to a number needs `[ngValue]`, not `[value]`.** The month and year
+  dropdowns on the run screen feed `periodMonth`/`periodYear`, which the API types as
+  `Integer`. With `[value]` the control would hold the string `"8"` and send it. A test
+  drives the real `<select>` for exactly this, because `patchValue` cannot fail this way.
+- **The run screen re-states one server rule, and only one.** "A period may only be run
+  once it is over" is checked in the form so the button explains itself before a request.
+  Everything else — whether the period is taken, whether anyone is payable — is left to the
+  response, and the server's message wins wherever it disagrees, because this browser's
+  clock is not authoritative.
 - **One flat hue for every bar on the dashboard.** Shading by value would encode the same
   number twice, since the row already names the category.
 - **The app is zoneless.** Anything a template reads must be a signal or an input; a

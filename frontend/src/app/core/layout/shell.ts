@@ -37,8 +37,22 @@ export class Shell {
 
   readonly navItems = computed<NavItem[]>(() => [
     {
+      // First, and available to everyone: for an EMPLOYEE it is the only thing here, and
+      // for anyone on the payroll it is what they check most often.
+      path: '/payslips',
+      label: 'My payslips',
+      available: true,
+    },
+    {
       path: '/employees',
       label: 'Employees',
+      available: this.auth.canManageEmployees(),
+    },
+    {
+      // The same ADMIN/HR pair as the employee screens, which is what the payroll-run
+      // endpoints authorise.
+      path: '/payroll-runs/new',
+      label: 'Run payroll',
       available: this.auth.canManageEmployees(),
     },
     {

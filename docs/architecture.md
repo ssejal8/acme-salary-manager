@@ -318,9 +318,14 @@ frontend/src/app/
 
 Built so far: `core/` in full, `shared/`, `features/auth/login`, `features/employees`
 (list and detail), `features/structures` in full (history *and* the assignment form),
-`features/components` (definitions, create gated to ADMIN) and `features/reports` (the
-compensation dashboard). `features/payroll` and `features/payslips` are directories in this
-plan only — their endpoints do not exist. So is `features/auth/change-password`.
+`features/components` (definitions, create gated to ADMIN), `features/reports` (the
+compensation dashboard) and `features/payslips` (my payslips and the payslip view; the
+HR-facing list and the PDF download are not built).
+
+`features/payroll` holds the start-run screen only. The run list, the draft review with
+its loss-of-pay adjustments and the finalise confirmation are still directories in this
+plan — their endpoints exist, so they are buildable rather than blocked, which is the
+difference between them and `features/auth/change-password`.
 
 `features/components` and `features/reports` are not in the original sketch above, which
 listed component definitions under reference data and folded the dashboard into `reports`.

@@ -1,0 +1,158 @@
+.page-header {
+  margin-bottom: var(--space-4);
+}
+
+.page-header__title {
+  font-size: 1.375rem;
+  font-weight: 700;
+}
+
+.page-header__subtitle {
+  margin: var(--space-1) 0 0;
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+.latest,
+.history {
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+/* The most recent payslip is the thing people came for, so it is given weight. */
+.latest {
+  border-left: 3px solid var(--colour-accent);
+}
+
+.latest__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.latest__header .button {
+  text-decoration: none;
+}
+
+.latest__label {
+  margin: 0;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--colour-text-muted);
+}
+
+.latest__period {
+  margin: var(--space-1) 0 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.latest__lop {
+  margin: var(--space-3) 0 0;
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+.figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--space-3);
+  margin: var(--space-4) 0 0;
+  padding: var(--space-3);
+  background: var(--colour-page);
+  border-radius: var(--radius-sm);
+}
+
+.figures__item {
+  min-width: 0;
+}
+
+.figures__label {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--colour-text-muted);
+}
+
+.figures__value {
+  margin: var(--space-1) 0 0;
+  /* Overrides .numeric's right alignment: a labelled tile is not a column. */
+  text-align: left;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+/* Net pay is the figure an employee recognises. */
+.figures__item--emphasis .figures__value {
+  color: var(--colour-accent-dark);
+  font-size: 1.125rem;
+}
+
+.history__title {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-top: var(--space-3);
+}
+
+.payslips {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+}
+
+.payslips th,
+.payslips td {
+  padding: var(--space-3);
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--colour-border);
+}
+
+.payslips tbody tr:last-child th,
+.payslips tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.payslips thead th {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--colour-text-muted);
+}
+
+.payslips__amount {
+  text-align: right;
+}
+
+.payslips__period {
+  font-weight: 600;
+}
+
+.payslips__net {
+  font-weight: 700;
+}
+
+.payslips__actions {
+  text-align: right;
+}
+
+.payslips__link {
+  color: var(--colour-accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.payslips__link:hover {
+  text-decoration: underline;
+}

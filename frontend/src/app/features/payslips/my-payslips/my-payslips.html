@@ -1,0 +1,107 @@
+<header class="page-header">
+  <div>
+    <h1 class="page-header__title">My payslips</h1>
+    <p class="page-header__subtitle">
+      Your published payslips, most recent first.
+    </p>
+  </div>
+</header>
+
+@if (errorMessage(); as message) {
+  <p class="alert alert--error" role="alert">{{ message }}</p>
+}
+
+@if (hasNone()) {
+  <!--
+    Not an error, and worth saying why rather than showing a bare "none": a payslip
+    appears only once the month's payroll has been finalised, so "nothing here" usually
+    means "not yet" rather than "something is wrong".
+  -->
+  <div class="card">
+    <app-empty-state
+      title="You have no payslips yet"
+      hint="A payslip appears here once the payroll for that month has been finalised."
+    />
+  </div>
+}
+
+@if (latest(); as payslip) {
+  <!--
+    The most recent one in full. It is what almost everyone opening this screen came for,
+    and the list response already carries every figure — so showing it costs nothing.
+  -->
+  <article class="card latest">
+    <header class="latest__header">
+      <div>
+        <p class="latest__label">Most recent</p>
+        <h2 class="latest__period">{{ payslip | period }}</h2>
+      </div>
+      <a class="button button--primary button--compact" [routerLink]="['/payslips', payslip.id]">
+        View payslip
+      </a>
+    </header>
+
+    <dl class="figures">
+      <div class="figures__item">
+        <dt class="figures__label">Gross</dt>
+        <dd class="figures__value numeric">{{ payslip.grossPay | money }}</dd>
+      </div>
+      <div class="figures__item">
+        <dt class="figures__label">Deductions</dt>
+        <dd class="figures__value numeric">{{ payslip.totalDeductions | money }}</dd>
+      </div>
+      <div class="figures__item figures__item--emphasis">
+        <dt class="figures__label">Net pay</dt>
+        <dd class="figures__value numeric">{{ payslip.netPay | money }}</dd>
+      </div>
+      <div class="figures__item">
+        <dt class="figures__label">Paid days</dt>
+        <dd class="figures__value numeric">{{ payslip.paidDays }} / {{ payslip.totalDays }}</dd>
+      </div>
+    </dl>
+
+    @if (payslip.lopDays > 0) {
+      <!-- Stated plainly: it is the usual reason a month is smaller than expected. -->
+      <p class="latest__lop">
+        {{ payslip.lopDays }} day{{ payslip.lopDays === 1 ? '' : 's' }} of unpaid leave were
+        recorded for this period, so the earnings are prorated.
+      </p>
+    }
+  </article>
+}
+
+@if (earlier().length > 0) {
+  <section class="card history" aria-labelledby="earlier-heading">
+    <h2 class="history__title" id="earlier-heading">Earlier payslips</h2>
+    <div class="table-scroll" tabindex="0" role="region" aria-label="Earlier payslips">
+      <table class="payslips">
+        <thead>
+          <tr>
+            <th scope="col">Period</th>
+            <th scope="col">Paid days</th>
+            <th scope="col" class="payslips__amount">Gross</th>
+            <th scope="col" class="payslips__amount">Deductions</th>
+            <th scope="col" class="payslips__amount">Net pay</th>
+            <th scope="col"><span class="visually-hidden">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (payslip of earlier(); track payslip.id) {
+            <tr>
+              <th scope="row" class="payslips__period">{{ payslip | period }}</th>
+              <td class="numeric">{{ payslip.paidDays }} / {{ payslip.totalDays }}</td>
+              <td class="numeric">{{ payslip.grossPay | money }}</td>
+              <td class="numeric">{{ payslip.totalDeductions | money }}</td>
+              <td class="numeric payslips__net">{{ payslip.netPay | money }}</td>
+              <td class="payslips__actions">
+                <a class="payslips__link" [routerLink]="['/payslips', payslip.id]">
+                  View<span class="visually-hidden"> payslip for {{ payslip | period }}</span>
+                </a>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+}

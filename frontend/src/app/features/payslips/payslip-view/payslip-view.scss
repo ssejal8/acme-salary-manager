@@ -1,0 +1,203 @@
+.breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+.breadcrumb__link {
+  color: var(--colour-accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.breadcrumb__link:hover {
+  text-decoration: underline;
+}
+
+.missing .button {
+  text-decoration: none;
+}
+
+/* Reads as a document, so it is narrower than a data screen and centred. */
+.payslip {
+  max-width: 48rem;
+  padding: var(--space-5);
+}
+
+.payslip__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-bottom: var(--space-4);
+  border-bottom: 2px solid var(--colour-border-strong);
+}
+
+.payslip__label {
+  margin: 0;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--colour-text-muted);
+}
+
+.payslip__period {
+  margin: var(--space-1) 0 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.payslip__note {
+  margin: var(--space-4) 0 0;
+}
+
+.identity {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: var(--space-4);
+  margin: var(--space-4) 0 0;
+}
+
+.identity__item {
+  min-width: 0;
+}
+
+.identity__label {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--colour-text-muted);
+}
+
+.identity__value {
+  margin: var(--space-1) 0 0;
+  /* Overrides .numeric's right alignment: these are labelled fields, not a column. */
+  text-align: left;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.identity__secondary {
+  display: block;
+  color: var(--colour-text-muted);
+  font-size: 0.8125rem;
+  font-weight: 400;
+}
+
+.lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  margin-top: var(--space-5);
+}
+
+.lines__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+}
+
+.lines__caption {
+  padding-bottom: var(--space-2);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--colour-text-muted);
+  text-align: left;
+}
+
+.lines__table th,
+.lines__table td {
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--colour-border);
+  text-align: left;
+}
+
+.lines__table thead th {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--colour-text-muted);
+}
+
+.lines__amount {
+  text-align: right;
+}
+
+.lines__name {
+  font-weight: 600;
+}
+
+.lines__code {
+  display: block;
+  color: var(--colour-text-muted);
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
+/* The subtotal, which is what makes the column checkable by hand. */
+.lines__table tfoot th,
+.lines__table tfoot td {
+  border-bottom: none;
+  border-top: 2px solid var(--colour-border-strong);
+  padding-top: var(--space-2);
+  font-weight: 700;
+}
+
+.lines__note {
+  margin: var(--space-4) 0 0;
+  color: var(--colour-text-muted);
+  font-size: 0.8125rem;
+}
+
+.net {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+  padding: var(--space-4);
+  background: var(--colour-accent-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.net__label {
+  margin: 0;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--colour-accent-dark);
+}
+
+/**
+ * The figure an employee recognises. No `tabular-nums`: there is no column to align to
+ * here, and equal-width digits on a large standalone number read as mechanically spaced.
+ */
+.net__value {
+  margin: var(--space-1) 0 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--colour-accent-dark);
+}
+
+.net__words {
+  margin: 0;
+  flex: 1 1 14rem;
+  color: var(--colour-accent-dark);
+  font-size: 0.875rem;
+  font-style: italic;
+  text-align: right;
+}

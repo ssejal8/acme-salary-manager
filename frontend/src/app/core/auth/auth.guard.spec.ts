@@ -6,13 +6,18 @@ import {
   UrlTree,
 } from '@angular/router';
 import { Role } from './auth.models';
-import { authGuard, roleGuard } from './auth.guard';
+import { authGuard, landingRedirect, roleGuard } from './auth.guard';
 import { AuthService } from './auth.service';
 
 interface AuthStub {
   isAuthenticated: boolean;
   expired: boolean;
   role: Role | null;
+}
+
+/** ADMIN and HR manage employees; EMPLOYEE does not. Mirrors AuthService. */
+function canManage(role: Role | null): boolean {
+  return role === 'ADMIN' || role === 'HR';
 }
 
 describe('route guards', () => {
@@ -37,6 +42,7 @@ describe('route guards', () => {
             isAuthenticated: () => stub.isAuthenticated,
             isAccessTokenExpired: () => stub.expired,
             hasAnyRole: (...roles: Role[]) => stub.role !== null && roles.includes(stub.role),
+            canManageEmployees: () => canManage(stub.role),
             logout,
           },
         },
@@ -116,6 +122,39 @@ describe('route guards', () => {
       runRoleGuard('ADMIN', 'HR');
 
       expect(createUrlTree).toHaveBeenCalledWith(['/not-authorised']);
+    });
+  });
+
+  /**
+   * The fix for a real dead end: every screen used to be ADMIN/HR, so an EMPLOYEE signed
+   * in successfully and was bounced straight to the no-access page.
+   */
+  describe('landingRedirect', () => {
+    function landOn(role: Role): string {
+      stub = { isAuthenticated: true, expired: false, role };
+      return TestBed.runInInjectionContext(
+        () => landingRedirect({} as never) as string,
+      );
+    }
+
+    it('sends an EMPLOYEE to their own payslips rather than nowhere', () => {
+      expect(landOn('EMPLOYEE')).toBe('/payslips');
+    });
+
+    it('sends HR and ADMIN to the employee list, which is their working screen', () => {
+      expect(landOn('HR')).toBe('/employees');
+      expect(landOn('ADMIN')).toBe('/employees');
+    });
+
+    it('never sends anyone to a screen their role cannot open', () => {
+      // The property that was broken. /employees is roleGuard('ADMIN','HR'), so landing
+      // an EMPLOYEE there is by construction a bounce to /not-authorised.
+      for (const role of ['ADMIN', 'HR', 'EMPLOYEE'] as Role[]) {
+        const target = landOn(role);
+        if (target === '/employees') {
+          expect(canManage(role)).toBe(true);
+        }
+      }
     });
   });
 });

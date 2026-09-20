@@ -1,0 +1,191 @@
+<header class="page-header">
+  <div>
+    <h1 class="page-header__title">Run payroll</h1>
+    <p class="page-header__subtitle">
+      Compute a month's pay for everyone eligible, as a draft. Nothing reaches an employee
+      until the run is finalised.
+    </p>
+  </div>
+</header>
+
+@if (generalFailure(); as message) {
+  <!--
+    Where a period is already taken or nobody in it is payable. Both are 409s about the
+    period rather than about a control, so they sit here rather than under a dropdown.
+  -->
+  <p class="alert alert--error" role="alert">{{ message }}</p>
+}
+
+<section class="card start" aria-labelledby="start-heading">
+  <h2 class="section__title" id="start-heading">Period</h2>
+  <p class="section__note">
+    A completed calendar month. Payroll is monthly, so a period is a whole month and
+    nothing smaller.
+  </p>
+
+  <form class="start__form" [formGroup]="form" (ngSubmit)="start()" novalidate>
+    <div class="field">
+      <label class="field__label" for="periodMonth">Month</label>
+      <select
+        id="periodMonth"
+        class="select"
+        [class.select--invalid]="periodMessage()"
+        formControlName="periodMonth"
+        [attr.aria-invalid]="!!periodMessage()"
+        [attr.aria-describedby]="periodMessage() ? 'period-error' : 'period-hint'"
+      >
+        <!--
+          `ngValue`, not `value`: a plain `value` binding would put the string "4" in the
+          control and send it, where the API's field is an Integer.
+        -->
+        @for (month of months; track month.value) {
+          <option [ngValue]="month.value">{{ month.label }}</option>
+        }
+      </select>
+    </div>
+
+    <div class="field">
+      <label class="field__label" for="periodYear">Year</label>
+      <select
+        id="periodYear"
+        class="select"
+        [class.select--invalid]="periodMessage()"
+        formControlName="periodYear"
+        [attr.aria-invalid]="!!periodMessage()"
+      >
+        @for (year of years; track year) {
+          <option [ngValue]="year">{{ year }}</option>
+        }
+      </select>
+    </div>
+
+    <div class="start__actions">
+      <button class="button button--primary" type="submit" [disabled]="!canStart()">
+        {{ starting() ? 'Computing…' : 'Start payroll run' }}
+      </button>
+    </div>
+  </form>
+
+  @if (periodMessage(); as message) {
+    <p class="field__error start__message" id="period-error">{{ message }}</p>
+  } @else {
+    <p class="field__hint start__message" id="period-hint">
+      {{ periodLabel() }} has {{ periodDays() }} days, which is what earnings are prorated
+      over.
+    </p>
+  }
+
+  <ul class="start__facts">
+    <li>
+      One payslip per employee eligible for the period who also holds a salary structure
+      effective on its last day. Someone eligible without a package is skipped rather than
+      given a zero payslip.
+    </li>
+    <li>
+      An employee who left during the month is included for it — eligibility is "joined
+      before the period ends and not gone before it begins", which is broader than
+      "active".
+    </li>
+    <li>
+      The period is taken by the draft. Running it again is refused until this draft is
+      cancelled, and a finalised month cannot be run again at all.
+    </li>
+    <li>
+      Loss of pay is not part of starting a run. Every payslip is computed at full
+      attendance, and unpaid days are applied by recomputing the draft afterwards.
+    </li>
+  </ul>
+</section>
+
+@if (starting()) {
+  <!--
+    Said out loud because the wait is real: the whole run is one transaction over the
+    entire payroll, and NFR-1.3 budgets 60 seconds for a thousand employees. The shell's
+    progress bar alone would look like a screen that had hung.
+  -->
+  <p class="alert alert--info" role="status">
+    Computing payroll for {{ runningFor() }}. This is one transaction over every eligible
+    employee and can take up to a minute for a large payroll — leaving the page will not
+    stop it, but you will not see the result.
+  </p>
+}
+
+@if (started(); as detail) {
+  <section class="card result" aria-labelledby="result-heading">
+    <header class="result__header">
+      <div>
+        <p class="result__label">Draft created</p>
+        <!--
+          The run's own period, not the dropdowns': they are still editable, and a heading
+          that followed them would relabel a draft that had already been computed.
+        -->
+        <h2 class="result__period" id="result-heading">{{ detail.run | period }}</h2>
+      </div>
+      <span class="badge badge--inactive">{{ detail.run.status }}</span>
+    </header>
+
+    <p class="result__note">
+      Nothing has been published. These figures are what finalising would publish,
+      unchanged — a run is never recomputed at finalisation, which is what makes reviewing
+      it mean something.
+    </p>
+
+    <dl class="figures">
+      <div class="figures__item">
+        <dt class="figures__label">Employees</dt>
+        <dd class="figures__value numeric">{{ detail.run.employeeCount }}</dd>
+      </div>
+      <div class="figures__item">
+        <dt class="figures__label">Gross</dt>
+        <dd class="figures__value numeric">{{ detail.run.totalGross | money }}</dd>
+      </div>
+      <div class="figures__item">
+        <dt class="figures__label">Deductions</dt>
+        <dd class="figures__value numeric">{{ detail.run.totalDeductions | money }}</dd>
+      </div>
+      <div class="figures__item figures__item--emphasis">
+        <dt class="figures__label">Net payable</dt>
+        <dd class="figures__value numeric">{{ detail.run.totalNet | money }}</dd>
+      </div>
+    </dl>
+
+    <div class="table-scroll" tabindex="0" role="region" aria-label="Computed payslips">
+      <table class="payslips">
+        <caption class="payslips__caption">
+          {{ detail.payslips.length }} payslip{{ detail.payslips.length === 1 ? '' : 's' }}
+          computed for run #{{ detail.run.id }}
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">Employee</th>
+            <th scope="col">Paid days</th>
+            <th scope="col" class="payslips__amount">Gross</th>
+            <th scope="col" class="payslips__amount">Deductions</th>
+            <th scope="col" class="payslips__amount">Net pay</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (payslip of detail.payslips; track payslip.id) {
+            <tr>
+              <!--
+                By id, because that is all a run's payslip carries: it names its employee
+                by reference and leaves resolving them to whoever needs the name.
+              -->
+              <th scope="row" class="payslips__employee code">#{{ payslip.employeeId }}</th>
+              <td class="numeric">{{ payslip.paidDays }} / {{ payslip.totalDays }}</td>
+              <td class="numeric">{{ payslip.grossPay | money }}</td>
+              <td class="numeric">{{ payslip.totalDeductions | money }}</td>
+              <td class="numeric payslips__net">{{ payslip.netPay | money }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <p class="result__pending">
+      Reviewing this draft line by line, applying loss-of-pay days and finalising it are
+      API-only for now — those screens do not exist yet, so the draft stays open until one
+      of them is used.
+    </p>
+  </section>
+}

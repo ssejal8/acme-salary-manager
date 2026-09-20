@@ -14,17 +14,20 @@ the audit trail and the paging contract.
 The Angular frontend now covers **every screen whose API exists**: login and a role-aware
 shell, the paged/filtered/sorted employee list with its state in the URL, the employee
 record with its compensation and full revision history, the package assignment form with a
-live server-side preview, the compensation dashboard, and the salary component definitions.
+live server-side preview, the compensation dashboard, the salary component definitions, and
+starting a payroll run.
 
-The **payroll run engine** and **payslip reads** are implemented on the backend —
-computation, proration, the draft → finalise/cancel state machine, and `/payslips/me` with
-record-level ownership — but none of it has a UI yet. Still missing: payslip PDF export,
-the HR-facing payslip list, employee create/update/deactivate, change password, and the
-audit trail query.
+The **payroll run engine** is implemented on the backend — computation, proration, and the
+draft → finalise/cancel state machine. Starting a run now has a screen: HR picks a
+completed month and gets the draft back with its totals and every payslip in it. The rest
+of the cycle is still API-only — reviewing a draft line by line, applying loss-of-pay days,
+finalising and cancelling have no UI, so a month is still published with curl. Still
+missing entirely: payslip PDF export, the HR-facing payslip list, employee
+create/update/deactivate, change password, and the audit trail query.
 
-An EMPLOYEE now has an endpoint of their own (`GET /payslips/me`) but **still no screen**:
-the frontend is unchanged, so signing in as one lands on the no-access page. That is now a
-frontend gap rather than a missing API.
+An EMPLOYEE now has screens of their own — their payslip list and a payslip view — so all
+three roles land somewhere useful. Until this turn, an employee signed in successfully and
+was bounced to the no-access page, because every route was ADMIN/HR.
 
 ---
 
@@ -124,7 +127,7 @@ acme-salary-manager/
 │       └── test/java/com/acme/salary/
 ├── frontend/                        Angular single-page application
 │   ├── angular.json                 build, serve (with the /api proxy), test, lint
-│   ├── proxy.conf.json              dev-server proxy: /api → localhost:8080
+│   ├── proxy.conf.mjs               dev-server proxy: /api → localhost:8080, 502 on refusal
 │   ├── .npmrc                       legacy-peer-deps, and why — see Prerequisites
 │   └── src/
 │       ├── environments/            per-environment settings (API base path)
@@ -141,6 +144,8 @@ acme-salary-manager/
 │               ├── employees/       list (filter · sort · page) and detail
 │               ├── structures/      salary history + the assignment form with live preview
 │               ├── components/      salary component definitions (create is ADMIN-only)
+│               ├── payroll/         start a run + the period arithmetic behind the picker
+│               ├── payslips/        my payslips + one payslip, for any role
 │               ├── reports/         compensation dashboard
 │               └── errors/          no-access and not-found pages
 ├── docs/
@@ -560,13 +565,39 @@ detection, and every feature area lazy-loaded by route. Module-specific notes ar
 | `/employees` | ADMIN, HR | Employee list: name search, department/designation/grade filters, leaver visibility, sortable columns, paging, rows-per-page |
 | `/employees/:id` | ADMIN, HR | One employee's record, plus the package in force and every revision behind it |
 | `/employees/:id/salary-structures/new` | ADMIN, HR | Assign a package, with gross/net/CTC costed by the server as the figures are edited |
+| `/payroll-runs/new` | ADMIN, HR | Start a payroll run for a completed month, and see the draft it computed |
 | `/reports/compensation` | ADMIN, HR | What the packages in force cost, by department and by grade |
 | `/salary-components` | ADMIN, HR | Component definitions; only ADMIN may define one |
+| `/payslips` | any authenticated | My own payslips, newest first — the EMPLOYEE's home |
+| `/payslips/:id` | any authenticated | One payslip as a document; the API enforces ownership |
 | `/not-authorised` | any | Shown when a signed-in user's role does not cover a route |
 
 Everything above is server-driven. Nothing is filtered, sorted or paged in the browser, so
 the counts and page numbers are real — sorting page 1 of 12 re-queries and returns the
 first page of the new order rather than reordering the twenty rows in memory.
+
+### Payslips, and the role-aware landing
+
+`/payslips` is the EMPLOYEE's home and the fix for a real dead end: every route used to be
+ADMIN/HR, so an employee signed in successfully and was bounced to the no-access page. The
+root path now redirects by role (`landingRedirect`), and "My payslips" is the one nav item
+available to everyone — an HR user on the payroll has payslips of their own, and "my own
+data" is not a privilege to withhold.
+
+The list shows the most recent payslip **in full**, because `GET /payslips/me` returns each
+one complete: the API made a payslip stand alone so a PDF would need nothing else, so the
+list needs no second request and opening one is a navigation rather than a round trip. The
+payslip view still fetches by id, because a pasted link has to work without visiting the
+list first.
+
+Two things the screens are careful about:
+
+- **A missing payslip and a forbidden one look identical.** The API answers 404 for a
+  payslip the caller may not have, so a 403 cannot be used to confirm an id exists. The
+  screen reports what it was told and does not speculate about which case it is.
+- **Unpaid leave is explained, not left implicit.** A smaller month is the commonest
+  surprise on a payslip, so both screens say how many days were unpaid and that earnings
+  are prorated while fixed statutory deductions are not.
 
 ### The employee list keeps its state in the URL
 
@@ -662,6 +693,38 @@ asks, and shows the answer. Two consequences:
 The form is pre-filled from the package in force, which makes a raise a small edit rather
 than a re-entry of six figures. The effective date is deliberately left blank — it is the
 one field that has to be a decision.
+
+### Starting a payroll run
+
+`/payroll-runs/new` is two dropdowns and a button, so the screen's real work is explaining
+what the button does. That is not decoration: a run computes a month's pay for the whole
+organisation in one transaction, it takes the period for itself so a second attempt is a
+409 until the first is cancelled, and it can take a minute over a thousand employees. None
+of that is guessable from a spinner, so the screen says each of it — including that
+somebody eligible without a package is skipped, that a leaver is included for the month
+they left, and that loss of pay is applied by recomputing afterwards rather than here.
+
+What comes back is rendered rather than summarised away: the draft's totals and a row per
+computed payslip. Those are the figures finalising would publish *unchanged* (FR-5.8),
+which is the only reason reviewing a draft means anything — so showing them is the point of
+the response, not a courtesy.
+
+Three details are deliberate:
+
+- **The month defaults to the month just gone**, which is what payroll is nearly always
+  being run for, and the period arithmetic behind that lives in `payroll-period.ts` and is
+  tested directly. The month before January is in the previous year and February is 28 days
+  or 29; each of those getting it wrong would offer the wrong month to run.
+- **"A period may only be run once it is over" is mirrored in the form**, so the button
+  explains itself before a request rather than after a 400. It is a mirror and not a
+  replacement: the browser's clock is not authoritative, and where the server disagrees its
+  message is what gets shown.
+- **The draft's heading names the run's own period, not the dropdowns'.** They stay
+  editable after a run, and a heading that followed them would relabel a draft that had
+  already been computed.
+
+Reviewing a draft line by line, adjusting loss-of-pay days, finalising and cancelling have
+no screens yet, and the result panel says so rather than leaving it to be discovered.
 
 ### The compensation dashboard
 
@@ -845,6 +908,12 @@ Three documents, in the order worth reading them:
 - [x] Payroll run engine: proration, the draft/finalise/cancel state machine, atomic
       runs, and the period guard
 - [x] Payslip reads: `/payslips/me` and `/payslips/{id}` with record-level ownership
+- [x] Angular payslips: my payslips and a payslip view, plus a role-aware landing so an
+      EMPLOYEE has somewhere to go
+- [x] Angular payroll: the start-run screen over `POST /payroll-runs`, with the draft it
+      computes rendered in full
+- [ ] Angular payroll review: the run list, a draft review screen with loss-of-pay
+      adjustments, and finalise/cancel — the rest of FR-5.5 to FR-5.10
 - [ ] Payslip PDF export (FR-6.4) and the HR-facing filtered list (FR-6.5)
 - [ ] Reference-data write endpoints (ADMIN) and the audit-trail query endpoint
 - [ ] CI pipeline: build, test, lint on every push

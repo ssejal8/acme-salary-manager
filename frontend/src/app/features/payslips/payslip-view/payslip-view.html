@@ -1,0 +1,146 @@
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a class="breadcrumb__link" routerLink="/payslips">My payslips</a>
+  <span class="breadcrumb__separator" aria-hidden="true">/</span>
+  <span>{{ payslip() ? (payslip()! | period) : 'Payslip' }}</span>
+</nav>
+
+@if (errorMessage(); as message) {
+  <p class="alert alert--error" role="alert">{{ message }}</p>
+  <p class="missing">
+    <a class="button button--secondary" routerLink="/payslips">Back to my payslips</a>
+  </p>
+}
+
+@if (payslip(); as slip) {
+  <article class="card payslip">
+    <header class="payslip__header">
+      <div>
+        <p class="payslip__label">Payslip for</p>
+        <h1 class="payslip__period">{{ slip | period }}</h1>
+      </div>
+      @if (slip.published) {
+        <span class="badge badge--active">Published</span>
+      } @else {
+        <!--
+          Only HR ever sees this: an employee is refused a payslip whose run is still a
+          draft, because the figures may change. Saying so is important for whoever does
+          see it — these are not final numbers.
+        -->
+        <span class="badge badge--inactive">Draft — not yet published</span>
+      }
+    </header>
+
+    <!-- Who it is for. FR-6.2: a payslip has to identify its subject. -->
+    <dl class="identity">
+      <div class="identity__item">
+        <dt class="identity__label">Employee</dt>
+        <dd class="identity__value">
+          {{ slip.employee.fullName }}
+          <span class="identity__secondary code">{{ slip.employee.employeeCode }}</span>
+        </dd>
+      </div>
+      <div class="identity__item">
+        <dt class="identity__label">Designation</dt>
+        <dd class="identity__value">{{ slip.employee.designation }}</dd>
+      </div>
+      <div class="identity__item">
+        <dt class="identity__label">Department</dt>
+        <dd class="identity__value">{{ slip.employee.department }}</dd>
+      </div>
+      <div class="identity__item">
+        <dt class="identity__label">Days paid</dt>
+        <dd class="identity__value numeric">
+          {{ slip.paidDays }} of {{ slip.totalDays }}
+          @if (slip.lopDays > 0) {
+            <span class="identity__secondary">
+              {{ slip.lopDays }} unpaid
+            </span>
+          }
+        </dd>
+      </div>
+    </dl>
+
+    @if (slip.lopDays > 0) {
+      <p class="alert alert--info payslip__note" role="note">
+        {{ slip.lopDays }} day{{ slip.lopDays === 1 ? '' : 's' }} of unpaid leave were
+        recorded, so earnings are prorated to {{ slip.paidDays }} of
+        {{ slip.totalDays }} days. Fixed statutory deductions are not prorated.
+      </p>
+    }
+
+    <div class="lines">
+      <table class="lines__table">
+        <caption class="lines__caption">Earnings</caption>
+        <thead>
+          <tr>
+            <th scope="col">Component</th>
+            <th scope="col" class="lines__amount">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (line of slip.earnings; track line.code) {
+            <tr>
+              <th scope="row" class="lines__name">
+                {{ line.name }}
+                <span class="lines__code code">{{ line.code }}</span>
+              </th>
+              <td class="numeric">{{ line.amount | money }}</td>
+            </tr>
+          }
+        </tbody>
+        <tfoot>
+          <tr>
+            <th scope="row">Gross pay</th>
+            <!-- The server's total, not a sum of the rows: that is what makes it checkable. -->
+            <td class="numeric">{{ slip.grossPay | money }}</td>
+          </tr>
+        </tfoot>
+      </table>
+
+      @if (slip.deductions.length > 0) {
+        <table class="lines__table">
+          <caption class="lines__caption">Deductions</caption>
+          <thead>
+            <tr>
+              <th scope="col">Component</th>
+              <th scope="col" class="lines__amount">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (line of slip.deductions; track line.code) {
+              <tr>
+                <th scope="row" class="lines__name">
+                  {{ line.name }}
+                  <span class="lines__code code">{{ line.code }}</span>
+                </th>
+                <td class="numeric">{{ line.amount | money }}</td>
+              </tr>
+            }
+          </tbody>
+          <tfoot>
+            <tr>
+              <th scope="row">Total deductions</th>
+              <td class="numeric">{{ slip.totalDeductions | money }}</td>
+            </tr>
+          </tfoot>
+        </table>
+      }
+    </div>
+
+    <!-- Net pay, and the words FR-6.3 asks for, rendered by the server so they agree. -->
+    <div class="net">
+      <div class="net__figure">
+        <p class="net__label">Net pay</p>
+        <p class="net__value">{{ slip.netPay | money }}</p>
+      </div>
+      <p class="net__words">{{ slip.netPayInWords }}</p>
+    </div>
+
+    <p class="lines__note">
+      Each component is rounded before the totals are summed, so the lines above add up
+      exactly. All figures are calculated by the server.
+    </p>
+  </article>
+} @else if (loaded() && !errorMessage()) {
+  <p class="alert alert--error" role="alert">This payslip could not be found.</p>
+}
