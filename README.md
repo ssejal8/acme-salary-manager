@@ -16,9 +16,10 @@ shell, the paged/filtered/sorted employee list with its state in the URL, the em
 record with its compensation and full revision history, the package assignment form with a
 live server-side preview, the compensation dashboard, and the salary component definitions.
 
-What is left is blocked on the backend rather than on the UI: payroll runs, payslips,
-employee create/update/deactivate, employee self-service, change password, and the audit
-trail query all need endpoints that do not exist yet. One consequence is worth naming —
+The **payroll run engine** is now implemented on the backend — computation, proration, and
+the draft → finalise/cancel state machine — but has no UI yet. Still missing entirely:
+payslip views and PDF export, employee create/update/deactivate, employee self-service,
+change password, and the audit trail query. One consequence is worth naming —
 **an EMPLOYEE can sign in but has nowhere to go**, because every screen is ADMIN/HR and the
 `/me` endpoints their own view needs are not built.
 
@@ -107,6 +108,7 @@ acme-salary-manager/
 │       │   ├── common/web/          correlation-id filter, paging contract + sanitiser
 │       │   ├── employee/            Employee aggregate, repository, search, controller
 │       │   ├── orgdata/             departments, designations, grades + read endpoints
+│       │   ├── payroll/             runs, payslips + the pure payslip calculator
 │       │   ├── salarycomponent/     component definitions (earnings, deductions)
 │       │   ├── report/              compensation analytics (cost, department, grade)
 │       │   ├── salarystructure/     effective-dated packages + the pure calculator
@@ -309,6 +311,65 @@ Four things about it are deliberate:
   those are the mitigations ADR-004 relies on.
 - **There is no logout endpoint.** Tokens are stateless and cannot be revoked, so a server
   logout would report a success it could not deliver. The client discards them instead.
+
+### Payroll runs
+
+A run computes a month's pay for everyone eligible, as a reviewable draft, then publishes
+it. ADMIN and HR only — a draft holds every salary in the organisation.
+
+| Endpoint | Purpose |
+| --- | --- |
+| `POST /api/v1/payroll-runs` | Start a draft run for a period, computing every payslip |
+| `GET /api/v1/payroll-runs` | Runs newest period first, with totals; no payslips |
+| `GET /api/v1/payroll-runs/{id}` | One run with every payslip in it |
+| `POST /api/v1/payroll-runs/{id}/recompute` | Recompute a draft, applying LOP adjustments |
+| `POST /api/v1/payroll-runs/{id}/finalise` | Publish the payslips already computed |
+| `POST /api/v1/payroll-runs/{id}/cancel` | Abandon a draft and free the period |
+
+```bash
+curl -s -X POST http://localhost:8080/api/v1/payroll-runs \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"periodYear":2026,"periodMonth":4}'
+```
+
+**How proration works** (FR-5.4). Paid days are the period's calendar days less the
+loss-of-pay days, and the treatment differs by component:
+
+| | `FLAT` | `PERCENT_OF_BASIC` |
+| --- | --- | --- |
+| Earning | prorated | percentage of the **prorated** basic |
+| Deduction | **not** prorated | percentage of the **prorated** basic |
+
+This is the pipeline [architecture §5.2](docs/architecture.md#52-calculation-pipeline)
+already specified, step for step, including `FLAT → value as-is` for deductions — a flat
+deduction such as professional tax is a fixed statutory charge that does not shrink because
+someone took unpaid leave. A percentage deduction needs no proration of its own: 12% of an
+already-prorated basic follows attendance down exactly once, and prorating it again would
+reduce it twice.
+
+Six things the engine does that are worth knowing:
+
+- **Payslips exist from creation, not from finalisation** (FR-5.8). Finalising publishes
+  what was reviewed *without recomputing it*, which is what makes the review mean anything.
+- **A period may only be run once it is over.** Not in the requirements, and defensible
+  anyway: proration divides by the days in the month, so running March on the 10th would
+  pay a full month for a month that has not happened.
+- **A second run for a period is a 409** (FR-5.7). The pre-check gives a readable message;
+  the partial unique index `uq_payroll_runs_active_period` is what actually prevents it
+  under a race — and it counts only DRAFT and FINALISED, so a cancelled run does not block
+  a retry.
+- **Adjustments are the whole picture, not a delta.** An employee absent from the
+  `recompute` list is recomputed at full attendance, which is how a mistaken LOP entry is
+  undone. As a patch there would be no way to express "clear this".
+- **Someone eligible but without a package is skipped, not given a zero payslip** — the
+  same treatment compensation analytics gives them.
+- **A leaver is included for the month they left.** Eligibility is "joined on or before the
+  period ends and not gone before it begins" (FR-2.6), which is broader than "active".
+
+The whole run is one transaction (FR-5.9), which is why ADR-011 chose a synchronous run: a
+failure halfway must leave no partial run, and inside one transaction the rollback is the
+database's problem rather than a compensating-action problem. The cost is a request that
+grows with headcount — NFR-1.3 budgets 60 seconds for 1,000 employees.
 
 ### Reference data
 
@@ -643,6 +704,14 @@ Two tests cover part of that gap with no database at all:
   calculator, and asserts the figures quoted above. Edit the seed and the documentation
   stops being wrong quietly.
 
+On the payroll engine the tests are weighted to where money goes wrong rather than to
+line coverage. `PayslipCalculatorTest` covers the proration rule per component kind, the
+invariant that displayed lines always sum to displayed totals at every LOP value, and the
+edge that matters most: a package valid at full attendance can become **unpayable** under
+proration, because the earnings shrink while a flat deduction stays put. That case is real
+— the seeded package cannot be computed at 30 days of loss of pay — and it was the test
+finding, not a guess.
+
 One backend test is worth naming, because it covers the gap the others leave.
 `TokenAuthenticationFlowTest` drives a token minted by the real login through the real
 filter chain onto a real protected endpoint. The other security tests each verify one
@@ -725,7 +794,8 @@ Three documents, in the order worth reading them:
 - [x] Angular salary components: definitions list, with create gated to ADMIN
 - [ ] Change own password (FR-1.6) — `tokenVersion` already invalidates tokens on change
 - [ ] Employee self-service `/me` endpoints and the ownership checks they need
-- [ ] Payroll run engine with proration and draft/finalise states
+- [x] Payroll run engine: proration, the draft/finalise/cancel state machine, atomic
+      runs, and the period guard
 - [ ] Payslip views and PDF export
 - [ ] Reference-data write endpoints (ADMIN) and the audit-trail query endpoint
 - [ ] CI pipeline: build, test, lint on every push

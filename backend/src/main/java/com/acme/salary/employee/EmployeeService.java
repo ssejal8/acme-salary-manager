@@ -3,6 +3,7 @@ package com.acme.salary.employee;
 import com.acme.salary.common.error.NotFoundException;
 import com.acme.salary.common.web.PageResponse;
 import com.acme.salary.employee.dto.EmployeeSummaryResponse;
+import java.time.LocalDate;
 import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -53,6 +54,26 @@ public class EmployeeService {
     @Transactional(readOnly = true)
     public List<EmployeeCompensationContext> activeCompensationCohort() {
         return employees.findAllByStatus(EmployeeStatus.ACTIVE).stream()
+                .map(EmployeeCompensationContext::from)
+                .toList();
+    }
+
+    /**
+     * Everyone who belongs in a payroll run for the given period (FR-5.2, FR-2.6).
+     *
+     * <p>Joined on or before the period ends and not gone before it begins, which is
+     * broader than "active": someone who left mid-month is still owed part of it. The date
+     * predicates are pushed to the database, then {@link Employee#isEligibleForPayroll}
+     * re-applies the same rule as the authority on it — one definition, and a query that
+     * cannot silently diverge from it.
+     *
+     * <p>Whether each of them also holds an effective salary structure is the salary
+     * structure feature's question, so it is not asked here.
+     */
+    @Transactional(readOnly = true)
+    public List<EmployeeCompensationContext> payrollCohort(LocalDate periodStart, LocalDate periodEnd) {
+        return employees.findPayrollEligible(periodStart, periodEnd).stream()
+                .filter(employee -> employee.isEligibleForPayroll(periodStart, periodEnd))
                 .map(EmployeeCompensationContext::from)
                 .toList();
     }

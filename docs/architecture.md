@@ -229,8 +229,25 @@ run's state, stamps `finalisedAt`, and makes the existing payslips visible to em
 parent run's state, not a separate flag — there is no way for a payslip to be visible
 while its run is still a draft.
 
-Recompute deletes and regenerates the draft run's payslips inside one transaction. It is
-idempotent: the same inputs always produce the same rows.
+Recompute rebuilds the draft run's payslips inside one transaction, and is idempotent: the
+same inputs always produce the same rows.
+
+It matches payslips to employees rather than deleting and reinserting them. An employee
+still in the cohort keeps their payslip row — its figures and lines are replaced — while an
+employee who has dropped out is removed by `orphanRemoval`, and a newly eligible one is
+added. Identity is by employee, not by row, which is also what
+`uq_payslips_run_employee` requires. Preserving the row means a review screen holding a
+payslip id does not find it stale after a recompute; the cost is that the rebuild is a
+merge rather than a truncate.
+
+Two guards sit on the run rather than in the pipeline:
+
+- **A period may only be run once it has ended.** Not a stated requirement, and adopted
+  anyway: proration divides by the days in the month, so running March on the 10th would
+  pay a full month for a month that has not happened.
+- **An empty run is refused rather than saved.** A run with no payslips would publish
+  nothing while occupying the period against a retry, which is worse than a 409 saying
+  nobody is payable.
 
 ### 5.2 Calculation pipeline
 

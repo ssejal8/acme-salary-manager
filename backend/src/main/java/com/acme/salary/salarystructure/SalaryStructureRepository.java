@@ -64,6 +64,27 @@ public interface SalaryStructureRepository extends JpaRepository<SalaryStructure
             """)
     List<SalaryStructure> findCurrentForEmployees(@Param("employeeIds") Collection<Long> employeeIds);
 
+    /**
+     * The revision governing pay on a date, for many employees in one query (FR-5.3).
+     *
+     * <p>The batch form of {@link #findEffectiveOn}, and the one a payroll run uses: per
+     * employee it would be a thousand queries for a thousand employees, against the
+     * 60-second budget in NFR-1.3.
+     *
+     * <p>Employees with no revision effective on that date are simply absent from the
+     * result. That is not an error — they are excluded from the run (FR-5.2).
+     */
+    @Query("""
+            SELECT DISTINCT s FROM SalaryStructure s
+            LEFT JOIN FETCH s.components line
+            LEFT JOIN FETCH line.component
+            WHERE s.employeeId IN :employeeIds
+              AND s.effectiveFrom <= :onDate
+              AND (s.supersededOn IS NULL OR s.supersededOn > :onDate)
+            """)
+    List<SalaryStructure> findEffectiveOnForEmployees(
+            @Param("employeeIds") Collection<Long> employeeIds, @Param("onDate") LocalDate onDate);
+
     boolean existsByEmployeeIdAndEffectiveFrom(Long employeeId, LocalDate effectiveFrom);
 
     boolean existsByEmployeeId(Long employeeId);
