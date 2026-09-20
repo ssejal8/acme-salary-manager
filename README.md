@@ -16,12 +16,15 @@ shell, the paged/filtered/sorted employee list with its state in the URL, the em
 record with its compensation and full revision history, the package assignment form with a
 live server-side preview, the compensation dashboard, and the salary component definitions.
 
-The **payroll run engine** is now implemented on the backend — computation, proration, and
-the draft → finalise/cancel state machine — but has no UI yet. Still missing entirely:
-payslip views and PDF export, employee create/update/deactivate, employee self-service,
-change password, and the audit trail query. One consequence is worth naming —
-**an EMPLOYEE can sign in but has nowhere to go**, because every screen is ADMIN/HR and the
-`/me` endpoints their own view needs are not built.
+The **payroll run engine** and **payslip reads** are implemented on the backend —
+computation, proration, the draft → finalise/cancel state machine, and `/payslips/me` with
+record-level ownership — but none of it has a UI yet. Still missing: payslip PDF export,
+the HR-facing payslip list, employee create/update/deactivate, change password, and the
+audit trail query.
+
+An EMPLOYEE now has an endpoint of their own (`GET /payslips/me`) but **still no screen**:
+the frontend is unchanged, so signing in as one lands on the no-access page. That is now a
+frontend gap rather than a missing API.
 
 ---
 
@@ -370,6 +373,50 @@ The whole run is one transaction (FR-5.9), which is why ADR-011 chose a synchron
 failure halfway must leave no partial run, and inside one transaction the rollback is the
 database's problem rather than a compensating-action problem. The cost is a request that
 grows with headcount — NFR-1.3 budgets 60 seconds for 1,000 employees.
+
+### Payslips
+
+| Endpoint | Roles | Purpose |
+| --- | --- | --- |
+| `GET /api/v1/payslips/me` | any authenticated | The caller's own published payslips, newest first |
+| `GET /api/v1/payslips/{id}` | ADMIN, HR, owner | One payslip |
+
+```bash
+curl -s http://localhost:8080/api/v1/payslips/me -H "Authorization: Bearer $TOKEN"
+```
+
+**This is where record-level ownership is enforced.**
+[Architecture §8.1](docs/architecture.md#81-layers-of-defence) calls it the layer most often
+missed: a role check answers *"may an EMPLOYEE read payslips?"* but not *"may **this**
+employee read **this** payslip?"*. `@PreAuthorize` cannot answer the second — it does not
+know whose payslip it is until the row is loaded — so the decision lives in the service,
+against the authenticated principal (FR-1.5).
+
+The rules:
+
+- **ADMIN and HR may read any payslip**, draft included, because reviewing a draft run is
+  their job (FR-5.6).
+- **An EMPLOYEE may read only their own, and only once published.** A draft payslip has not
+  been published and its figures may still change (FR-5.8), so being its subject is not yet
+  grounds to see it. The same row HR is reviewing is refused to the person it is about.
+
+Three details worth knowing:
+
+- **`/me` takes no id**, which is the point of the path: there is nothing in the URL to
+  tamper with, so the endpoint cannot be aimed at anyone else however the request is built.
+- **A payslip you may not have answers 404, not 403.** A 403 would confirm the id exists,
+  turning `/payslips/{id}` into a way to probe how many payslips there are and whose. The
+  caller learns the same thing either way — they cannot have it — and the log records the
+  real reason.
+- **`/me` is open to every authenticated role, not just EMPLOYEE.** An HR user who is also
+  on the payroll has payslips of their own, and "my own data" is not a privilege to
+  withhold. A caller with no employee record — an ADMIN login provisioned without one —
+  gets an empty list rather than an error.
+
+A payslip carries the employee's identity and the period so it stands alone (FR-6.2), and
+its figures come from the payslip's own columns, never from the employee's current package.
+A payslip is the record of what was paid; reading from the package in force would make a
+two-year-old payslip change when somebody gets a raise.
 
 ### Reference data
 
@@ -793,9 +840,11 @@ Three documents, in the order worth reading them:
 - [x] Angular compensation dashboard over `/reports/compensation`
 - [x] Angular salary components: definitions list, with create gated to ADMIN
 - [ ] Change own password (FR-1.6) — `tokenVersion` already invalidates tokens on change
-- [ ] Employee self-service `/me` endpoints and the ownership checks they need
+- [ ] Employee self-service for the *profile* and salary structure (`/employees/{id}`
+      and structures for self); payslips are done
 - [x] Payroll run engine: proration, the draft/finalise/cancel state machine, atomic
       runs, and the period guard
-- [ ] Payslip views and PDF export
+- [x] Payslip reads: `/payslips/me` and `/payslips/{id}` with record-level ownership
+- [ ] Payslip PDF export (FR-6.4) and the HR-facing filtered list (FR-6.5)
 - [ ] Reference-data write endpoints (ADMIN) and the audit-trail query endpoint
 - [ ] CI pipeline: build, test, lint on every push

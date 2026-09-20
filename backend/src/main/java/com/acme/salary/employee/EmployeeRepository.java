@@ -1,6 +1,7 @@
 package com.acme.salary.employee;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
@@ -46,6 +47,17 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, JpaSp
 
     /** The login provisioned for an employee (FR-2.7), used to resolve "my own data". */
     Optional<Employee> findByUserId(Long userId);
+
+    /**
+     * The same, with reference data, for a document that has to name the employee's
+     * department and job title — a payslip header (FR-6.2).
+     */
+    @EntityGraph(attributePaths = {"department", "designation", "grade"})
+    Optional<Employee> findWithReferencesByUserId(Long userId);
+
+    /** Identity for many employees at once, so a payslip list is not an N+1. */
+    @EntityGraph(attributePaths = {"department", "designation", "grade"})
+    List<Employee> findAllByIdIn(Collection<Long> ids);
 
     /**
      * Uniqueness pre-checks, so a duplicate produces a field-level 409 rather than a

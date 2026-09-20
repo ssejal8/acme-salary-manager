@@ -497,6 +497,22 @@ checked in the service against the authenticated principal
 an employee's own data are also exposed under `/me` paths so the common case has no id in
 the URL to tamper with.
 
+`PayslipService` is the worked example, and two of its choices generalise to every
+ownership check that follows:
+
+- **A refusal is indistinguishable from a miss.** A payslip the caller may not have answers
+  **404, not 403**. A 403 confirms the id exists, which turns an id-bearing endpoint into
+  an oracle for probing how many records there are and whose. The caller learns the same
+  thing either way — they cannot have it — and the log carries the real reason.
+- **Being the subject of a record is not always enough.** An employee may read their own
+  payslip only once its run is finalised: a draft has not been published and its figures
+  may still change ([FR-5.8](requirements.md#35-payroll-run)). Ownership and visibility are
+  separate questions, and the second one belongs to the parent aggregate's state.
+
+`/me` is open to every authenticated role rather than to EMPLOYEE alone. An HR user who is
+also on the payroll has payslips of their own, and "my own data" is not a privilege to
+withhold — the role gate answers *which operation*, and the service answers *which rows*.
+
 ### 8.2 Tokens
 
 Stateless JWTs, HMAC-signed, 60-minute access tokens plus 7-day refresh tokens

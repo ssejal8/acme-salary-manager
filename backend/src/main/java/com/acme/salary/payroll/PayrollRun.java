@@ -9,7 +9,6 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
-import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
@@ -72,8 +71,13 @@ public class PayrollRun extends BaseEntity {
     @Column(name = "cancelled_at")
     private Instant cancelledAt;
 
-    @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    @JoinColumn(name = "payroll_run_id", nullable = false)
+    /**
+     * The run owns its payslips, but the association is mapped from the child, because
+     * that is where the foreign key is. {@code mappedBy} rather than a {@code @JoinColumn}
+     * here is what lets a query reach a run from a payslip without loading every payslip
+     * in it.
+     */
+    @OneToMany(mappedBy = "run", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<Payslip> payslips = new ArrayList<>();
 
     protected PayrollRun() {
@@ -113,7 +117,7 @@ public class PayrollRun extends BaseEntity {
         for (Map.Entry<Long, PayslipAmounts> entry : amountsByEmployee.entrySet()) {
             Payslip payslip = existing.get(entry.getKey());
             if (payslip == null) {
-                rebuilt.add(new Payslip(entry.getKey(), entry.getValue()));
+                rebuilt.add(new Payslip(this, entry.getKey(), entry.getValue()));
             } else {
                 payslip.apply(entry.getValue());
                 rebuilt.add(payslip);

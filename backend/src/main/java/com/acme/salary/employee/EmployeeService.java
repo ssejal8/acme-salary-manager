@@ -4,7 +4,11 @@ import com.acme.salary.common.error.NotFoundException;
 import com.acme.salary.common.web.PageResponse;
 import com.acme.salary.employee.dto.EmployeeSummaryResponse;
 import java.time.LocalDate;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -76,6 +80,45 @@ public class EmployeeService {
                 .filter(employee -> employee.isEligibleForPayroll(periodStart, periodEnd))
                 .map(EmployeeCompensationContext::from)
                 .toList();
+    }
+
+    /**
+     * The employee a login belongs to (FR-2.7), which is how "my own data" is resolved.
+     *
+     * <p>Empty when the user has no employee record — an ADMIN or HR login provisioned
+     * without one. That is not an error and must not be reported as one: the caller
+     * decides what it means, and for a payslip list it means "you have none" rather than
+     * "something went wrong".
+     */
+    @Transactional(readOnly = true)
+    public Optional<EmployeeIdentity> findSelf(Long userId) {
+        return employees.findWithReferencesByUserId(userId).map(EmployeeIdentity::from);
+    }
+
+    /**
+     * Identity for a set of employees, keyed by id.
+     *
+     * <p>Batched because a payslip list needs a name per row, and per row it would be a
+     * query per payslip.
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, EmployeeIdentity> identitiesOf(Collection<Long> employeeIds) {
+        if (employeeIds == null || employeeIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, EmployeeIdentity> identities = new LinkedHashMap<>();
+        for (Employee employee : employees.findAllByIdIn(employeeIds)) {
+            identities.put(employee.getId(), EmployeeIdentity.from(employee));
+        }
+        return identities;
+    }
+
+    /** Identity for one employee, for a payslip header (FR-6.2). */
+    @Transactional(readOnly = true)
+    public EmployeeIdentity identityOf(Long employeeId) {
+        return employees.findWithReferencesById(employeeId)
+                .map(EmployeeIdentity::from)
+                .orElseThrow(() -> NotFoundException.of("Employee", employeeId));
     }
 
     /**

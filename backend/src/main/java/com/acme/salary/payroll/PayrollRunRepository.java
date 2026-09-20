@@ -1,6 +1,5 @@
 package com.acme.salary.payroll;
 
-import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -11,10 +10,11 @@ import org.springframework.data.repository.query.Param;
 /**
  * Payroll run persistence.
  *
- * <p>There is no repository for {@code Payslip}: payslips are reached through their run,
- * which is the aggregate root, and are cascaded from it. A second repository would make it
- * possible to load a payslip without its run and so without the state that decides whether
- * it may be changed.
+ * <p>Every <em>mutation</em> goes through this repository, because the run is the aggregate
+ * root and the state that decides whether a payslip may change belongs to it.
+ * {@link PayslipRepository} exists alongside it for <em>reads</em> only, and always fetches
+ * the run with the payslip — so a payslip view can never be rendered without the status
+ * that says whether it is published.
  */
 public interface PayrollRunRepository extends JpaRepository<PayrollRun, Long> {
 
@@ -59,19 +59,4 @@ public interface PayrollRunRepository extends JpaRepository<PayrollRun, Long> {
     @Query("SELECT run FROM PayrollRun run")
     Page<PayrollRun> findAllNewestFirst(Pageable pageable);
 
-    /**
-     * Every finalised payslip for an employee, newest period first (FR-6.1).
-     *
-     * <p>Filtered to FINALISED in the query rather than afterwards: a draft payslip is not
-     * published, and an employee must not see one (FR-5.8).
-     */
-    @Query("""
-            SELECT DISTINCT run FROM PayrollRun run
-            LEFT JOIN FETCH run.payslips payslip
-            LEFT JOIN FETCH payslip.lines
-            WHERE payslip.employeeId = :employeeId
-              AND run.status = com.acme.salary.payroll.PayrollRunStatus.FINALISED
-            ORDER BY run.periodYear DESC, run.periodMonth DESC
-            """)
-    List<PayrollRun> findFinalisedRunsForEmployee(@Param("employeeId") Long employeeId);
 }

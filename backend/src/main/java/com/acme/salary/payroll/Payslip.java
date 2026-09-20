@@ -6,6 +6,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
@@ -33,6 +34,18 @@ import java.util.List;
 @Entity
 @Table(name = "payslips")
 public class Payslip extends BaseEntity {
+
+    /**
+     * The run that owns this payslip.
+     *
+     * <p>Mapped from this side because that is where the foreign key is. It also makes the
+     * run reachable from a payslip in one query, which the payslip views need: the run
+     * carries the period and the status that decides whether the payslip is published at
+     * all. Without it, reading one payslip would mean loading its entire run.
+     */
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "payroll_run_id", nullable = false, updatable = false)
+    private PayrollRun run;
 
     @Column(name = "employee_id", nullable = false, updatable = false)
     private Long employeeId;
@@ -72,7 +85,8 @@ public class Payslip extends BaseEntity {
         // for JPA
     }
 
-    Payslip(Long employeeId, PayslipAmounts amounts) {
+    Payslip(PayrollRun run, Long employeeId, PayslipAmounts amounts) {
+        this.run = run;
         this.employeeId = employeeId;
         apply(amounts);
     }
@@ -97,6 +111,10 @@ public class Payslip extends BaseEntity {
         for (PayslipAmounts.Line line : amounts.lines()) {
             this.lines.add(new PayslipLine(line));
         }
+    }
+
+    public PayrollRun getRun() {
+        return run;
     }
 
     public Long getEmployeeId() {
