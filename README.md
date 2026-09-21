@@ -9,7 +9,8 @@ implemented — login issues a JWT, the filter chain accepts it, and the `@PreAu
 rules on every endpoint apply to real callers — so the API is reachable with curl rather
 than only from tests. Employee master data, reference data, salary component definitions
 and effective-dated salary structures are implemented, along with compensation analytics,
-the audit trail and the paging contract.
+the audit trail and the paging contract. The development database seeds **10,000
+employees**, which is the scale the screens and the queries are meant to be judged at.
 
 The Angular frontend now covers **every screen whose API exists**: login and a role-aware
 shell, the paged/filtered/sorted employee list with its state in the URL, the employee
@@ -192,18 +193,28 @@ The `dev` profile defaults match the compose database, so no `.env` is needed to
 Copy `.env.example` to `.env` when you need to point somewhere else — see
 [Configuration](#configuration).
 
-Flyway applies migrations on startup. Under the `dev` profile two seed migrations also
-load a working dataset; that seed location is excluded from every other profile, so
-fixtures can never reach a deployed schema.
+Flyway applies migrations on startup. Under the `dev` profile three seed migrations also
+load a working dataset — **10,000 employees** in total; that seed location is excluded from
+every other profile, so fixtures can never reach a deployed schema.
 
 | Seed | Contents |
 | --- | --- |
 | `V900` | Reference data — four departments, six designations, four grades with CTC bands, seven salary components |
-| `V901` | Twelve employees with fixed ids `1001`–`1012`, nine compensation packages, one raise history, one leaver, two employees with no package |
+| `V901` | Twelve **curated** employees, ids `1001`–`1012`: nine packages, one raise history, one leaver, two with no package |
+| `V902` | 9,988 **generated** employees, `E-1013`–`E-11000`, taking the organisation to 10,000 |
 
-The employee seed is **deterministic**: ids, dates and row timestamps are all fixed
-literals, so employee `1001` is the same person on every machine and the figures below are
-reproducible rather than approximate.
+Both employee seeds are **deterministic**: there is no `random()` anywhere, so employee
+`1001` and employee `E-5000` are the same people with the same salaries on every machine
+and after every reset. That is what lets the figures below be asserted rather than
+described.
+
+### The curated twelve (`V901`)
+
+Small enough to read as literal rows, and where the interesting paths live: `E-1001` has a
+**superseded revision** plus a current one (a raise, so the history screen has something to
+show); `E-1010` and `E-1011` have **no package**, which compensation analytics reports as a
+coverage gap; `E-1012` is a **leaver** whose package stays on record but is excluded from
+current cost.
 
 | What it shows | Figure |
 | --- | --- |
@@ -213,11 +224,60 @@ reproducible rather than approximate.
 | By department | Engineering 580,000 · Finance 140,000 · Sales 140,000 · HR 90,000 |
 | Median / average monthly gross | 90,000.00 / 105,555.56 |
 
-Three details are deliberate rather than accidental, because they make the interesting
-paths visible in a demo: employee `E-1001` has a **superseded revision** plus a current one
-(a raise, so the history screen has something to show); `E-1010` and `E-1011` have **no
-package**, which is what compensation analytics reports as a coverage gap; and `E-1012` is
-a **leaver** whose package stays on record but is excluded from current cost.
+`DevSeedFiguresTest` parses that SQL, prices it with the real calculator and asserts every
+figure in the table, so an edit to the seed fails the build rather than quietly making this
+documentation wrong.
+
+### The generated remainder (`V902`)
+
+Ten thousand is the size the problem statement describes, and most of this system's
+decisions — paging in the database, the sort whitelist, aggregate reporting, the cost of a
+payroll run — only become visible at that size. Rather than a multi-megabyte dump of
+literal rows that nobody can review, `V902` derives every value from the row number in
+about a hundred readable lines.
+
+| What it produces | Figure |
+| --- | --- |
+| Generated employees | 9,988 (10,000 with the curated twelve) |
+| Leavers | 102 — every 97th row, `INACTIVE` with an exit date |
+| Without a package | 39 generated, 41 including `E-1010` and `E-1011` |
+| Salary structures / lines | 9,949 / 59,694 |
+| Grade mix | 45% G1 · 35% G2 · 15% G3 · 5% G4 |
+| Department mix | 50% Engineering · 20% Finance · 10% HR · 20% Sales |
+| Monthly gross | 37,000 to 321,000 across 243 distinct values |
+| Joining dates | 1 Jan 2015 to 1 Jul 2026, each of 4,200 days used once |
+
+Salaries are derived from each employee's **own grade band**, spread across the middle 80%
+of it, so annual CTC always sits inside `[min_ctc, max_ctc]` and FR-4.3 would never have
+demanded an override — the same property the curated seed has, at scale. Designations fit
+the department and seniority fits the grade, so a G4 engineer is a manager rather than a
+junior on a manager's salary.
+
+**The seed proves itself.** A `DO` block at the end of `V902` re-costs every package in the
+database the way the calculator does and raises an exception — failing startup — if the
+employee count is wrong, or any package has a non-positive basic, falls outside its grade
+band, or deducts more than it pays. A demo dataset the application would itself reject is a
+trap for whoever reads it next.
+
+One consequence worth stating plainly: a payroll run over this dataset computes close to
+9,900 payslips in a single transaction (ADR-011), where NFR-1.3 budgets 60 seconds for
+1,000. This seed is precisely what makes that budget worth revisiting, and the run review
+screen renders one row per payslip, so it wants paging before anyone runs a month here.
+Both are known and recorded rather than discovered in a demo.
+
+The seeds are ordinary SQL, so they do not need the application to run. Against an
+already-migrated database, in order:
+
+```bash
+cd backend/src/main/resources/db/seed
+for f in V900__dev_seed.sql V901__dev_employee_seed.sql V902__bulk_employee_seed.sql; do
+  psql -h localhost -U salary_app -d salary_mgmt -f "$f"
+done
+```
+
+Every statement is idempotent (`ON CONFLICT DO NOTHING`), so a re-run is safe. `V902`
+depends on the first two — it resolves departments, grades and the HR author by natural
+key, and its self-check expects the curated twelve to be present.
 
 Every seeded package sits inside its grade's CTC band, so nothing in the dataset would
 have been rejected had it gone through the API.
@@ -861,7 +921,7 @@ that is where the money is computed, so it carries the strictest bar.
 
 ## Documentation
 
-Three documents, in the order worth reading them:
+Four documents, in the order worth reading them:
 
 - [docs/requirements.md](docs/requirements.md) — **what** the system must do. Full SRS:
   scope, functional requirements (`FR-*`), non-functional requirements (`NFR-*`), data
@@ -872,6 +932,9 @@ Three documents, in the order worth reading them:
 - [docs/decisions.md](docs/decisions.md) — **why**, and what each choice cost. Twenty-two
   decision records (`ADR-*`) with rejected alternatives, consequences, and revisit
   triggers, plus a consolidated tradeoff summary.
+- [docs/ai-usage.md](docs/ai-usage.md) — **how it was built**: the tooling, the prompting
+  patterns that produced the ADRs and the tests, what was verified and by what means,
+  where the AI was wrong and what caught it, and what remains unverified.
 
 ## Roadmap
 
@@ -905,6 +968,8 @@ Three documents, in the order worth reading them:
 - [ ] Change own password (FR-1.6) — `tokenVersion` already invalidates tokens on change
 - [ ] Employee self-service for the *profile* and salary structure (`/employees/{id}`
       and structures for self); payslips are done
+- [x] 10,000-employee seed: generated deterministically from the row number, in-band by
+      construction, and self-verifying
 - [x] Payroll run engine: proration, the draft/finalise/cancel state machine, atomic
       runs, and the period guard
 - [x] Payslip reads: `/payslips/me` and `/payslips/{id}` with record-level ownership
