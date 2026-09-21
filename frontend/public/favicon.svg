@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The ACME monogram: a white A on the application's accent blue.
+
+  Drawn as three stroked lines rather than as text or an outlined path, because a favicon
+  must render identically everywhere and a `<text>` element would depend on whatever font
+  the browser or rasteriser happens to resolve — on a machine missing it, a tofu box.
+  Geometry has no such dependency.
+
+  The colour is the accent token from styles.scss (#1c4f9c), unchanged, so the tab matches
+  the header of the page it belongs to. It is dark enough to hold a white glyph at 4.5:1
+  and reads on both light and dark browser chrome, which is why there is no
+  prefers-color-scheme variant.
+
+  Detail is deliberately minimal: the smallest size this is asked for is 16px, where
+  anything finer than a 2px stroke disappears into grey.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="ACME Salary Management">
+  <rect width="32" height="32" rx="7" fill="#1c4f9c"/>
+  <g fill="none" stroke="#ffffff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M16 8 L7.8 24.5"/>
+    <path d="M16 8 L24.2 24.5"/>
+    <!-- Low crossbar, which is what keeps the counter open once this is 16px wide. -->
+    <path d="M10.6 20.2 H21.4"/>
+  </g>
+</svg>
