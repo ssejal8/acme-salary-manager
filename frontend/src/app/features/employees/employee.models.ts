@@ -37,6 +37,46 @@ export interface EmployeeSummary {
 }
 
 /**
+ * Request body of `POST /employees` (FR-2.1).
+ *
+ * `dateOfJoining` is an ISO calendar date, `2026-04-01`, and may be in the future: a new
+ * hire who starts next month is recorded now.
+ */
+export interface CreateEmployeeRequest {
+  employeeCode: string;
+  firstName: string;
+  lastName: string;
+  workEmail: string;
+  dateOfJoining: string;
+  departmentId: number;
+  designationId: number;
+  gradeId: number;
+}
+
+/**
+ * Request body of `PUT /employees/{id}` (FR-2.3).
+ *
+ * The employee code and joining date are absent because they are immutable after
+ * creation — the code appears on published payslips, and the joining date is what every
+ * salary revision is validated against. The API would ignore them anyway; not sending
+ * them keeps the form honest about what it can change.
+ */
+export interface UpdateEmployeeRequest {
+  firstName: string;
+  lastName: string;
+  workEmail: string;
+  departmentId: number;
+  designationId: number;
+  gradeId: number;
+}
+
+/** Request body of `POST /employees/{id}/deactivate` (FR-2.5). */
+export interface DeactivateEmployeeRequest {
+  /** The exit date payroll eligibility is derived from (FR-2.6). */
+  exitDate: string;
+}
+
+/**
  * The sort keys the API accepts, mirroring `EmployeeController.SORTABLE_PROPERTIES`.
  *
  * This list is not decoration. The server rejects anything outside its whitelist with a

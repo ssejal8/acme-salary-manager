@@ -1,0 +1,94 @@
+.breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+.breadcrumb__link {
+  color: var(--colour-accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.breadcrumb__link:hover {
+  text-decoration: underline;
+}
+
+.page-header {
+  margin-bottom: var(--space-4);
+}
+
+.page-header__title {
+  font-size: 1.375rem;
+  font-weight: 700;
+}
+
+.page-header__subtitle {
+  margin: var(--space-1) 0 0;
+  max-width: 44rem;
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+.form {
+  padding: var(--space-4);
+  max-width: 48rem;
+}
+
+/* One column at 360px, two as soon as there is room (NFR-4.1). */
+.form__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: var(--space-4);
+}
+
+.form__field--wide,
+.form__fixed,
+.form__actions {
+  grid-column: 1 / -1;
+}
+
+/* The immutable pair, set apart so it reads as context rather than as inputs. */
+.form__fixed {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+  padding: var(--space-3) var(--space-4);
+  background: var(--colour-page);
+  border-radius: var(--radius-sm);
+}
+
+.form__fixed-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  font-weight: 600;
+}
+
+.form__fixed-note {
+  flex: 1 1 16rem;
+  margin: 0;
+  align-self: center;
+}
+
+.form__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding-top: var(--space-2);
+}
+
+/* An anchor styled as a button needs its underline removed. */
+.form__actions .button {
+  text-decoration: none;
+}
+
+.form__loading {
+  margin: 0;
+  color: var(--colour-text-muted);
+}

@@ -3,14 +3,24 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { PageResponse } from '../../shared/page-response';
-import { EmployeeQuery, EmployeeSummary } from './employee.models';
+import {
+  CreateEmployeeRequest,
+  DeactivateEmployeeRequest,
+  EmployeeQuery,
+  EmployeeSummary,
+  UpdateEmployeeRequest,
+} from './employee.models';
 
 /**
- * Reads the employee list and individual records.
+ * Employee master data: the list, one record, and the three writes (FR-2.1 to FR-2.5).
  *
  * Paging, filtering and sorting are all the server's job (NFR-1.2) — this builds the query
  * string and returns what comes back. Nothing is filtered or sorted in the browser, so
  * what a user sees on page 3 is a real page 3 and the total is a real count.
+ *
+ * There is no `delete`, and its absence is deliberate rather than an oversight: records
+ * are never hard-deleted, because a payslip from years ago must still resolve the person
+ * it was for (ADR-014). Leaving is {@link deactivate}.
  */
 @Injectable({ providedIn: 'root' })
 export class EmployeeService {
@@ -28,6 +38,33 @@ export class EmployeeService {
 
   get(id: number): Observable<EmployeeSummary> {
     return this.http.get<EmployeeSummary>(`${this.baseUrl}/${id}`);
+  }
+
+  /**
+   * Creates a record and returns it as stored (FR-2.1).
+   *
+   * The response is worth using rather than discarding: the server uppercases the
+   * employee code and lowercases the email, so what comes back is the truth about what
+   * was saved.
+   */
+  create(request: CreateEmployeeRequest): Observable<EmployeeSummary> {
+    return this.http.post<EmployeeSummary>(this.baseUrl, request);
+  }
+
+  /** Replaces the editable fields (FR-2.3). */
+  update(id: number, request: UpdateEmployeeRequest): Observable<EmployeeSummary> {
+    return this.http.put<EmployeeSummary>(`${this.baseUrl}/${id}`, request);
+  }
+
+  /**
+   * Records an exit (FR-2.5).
+   *
+   * A `POST` to a named sub-resource rather than a status field, because this is not
+   * "setting status to INACTIVE" — it records the date that decides which periods the
+   * person is still paid for.
+   */
+  deactivate(id: number, request: DeactivateEmployeeRequest): Observable<EmployeeSummary> {
+    return this.http.post<EmployeeSummary>(`${this.baseUrl}/${id}/deactivate`, request);
   }
 }
 

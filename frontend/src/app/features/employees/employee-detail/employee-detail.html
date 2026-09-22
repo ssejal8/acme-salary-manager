@@ -1,26 +1,92 @@
 <nav class="breadcrumb" aria-label="Breadcrumb">
   <a class="breadcrumb__link" routerLink="/employees">Employees</a>
   <span class="breadcrumb__separator" aria-hidden="true">/</span>
-  <span>{{ employee()?.fullName ?? 'Employee' }}</span>
+  <span>{{ currentRecord()?.fullName ?? 'Employee' }}</span>
 </nav>
 
 @if (errorMessage(); as message) {
   <p class="alert alert--error" role="alert">{{ message }}</p>
 }
 
-@if (employee(); as record) {
+@if (currentRecord(); as record) {
   <article class="card detail">
     <header class="detail__header">
       <div>
         <h1 class="detail__name">{{ record.fullName }}</h1>
         <p class="detail__code code">{{ record.employeeCode }}</p>
       </div>
-      @if (record.status === 'ACTIVE') {
-        <span class="badge badge--active">Active</span>
-      } @else {
-        <span class="badge badge--inactive">Left {{ record.exitDate | isoDate: '' }}</span>
-      }
+      <div class="detail__status">
+        @if (record.status === 'ACTIVE') {
+          <span class="badge badge--active">Active</span>
+        } @else {
+          <span class="badge badge--inactive">Left {{ record.exitDate | isoDate: '' }}</span>
+        }
+        <div class="detail__actions">
+          <!--
+            Editing a leaver's record is allowed: their compensation is frozen, but a
+            misspelled name is still worth correcting.
+          -->
+          <a
+            class="button button--secondary button--compact"
+            [routerLink]="['/employees', record.id, 'edit']"
+          >
+            Edit
+          </a>
+          @if (record.status === 'ACTIVE') {
+            <button
+              type="button"
+              class="button button--secondary button--compact"
+              [attr.aria-expanded]="exitFormOpen()"
+              aria-controls="record-exit"
+              (click)="toggleExitForm()"
+            >
+              {{ exitFormOpen() ? 'Cancel' : 'Record exit' }}
+            </button>
+          }
+        </div>
+      </div>
     </header>
+
+    @if (exitFormOpen()) {
+      <section class="exit" id="record-exit" aria-labelledby="exit-heading">
+        <h2 class="exit__title" id="exit-heading">Record an exit</h2>
+        <p class="exit__note">
+          The record is kept, not deleted — a payslip from years ago must still name the
+          person it was for. {{ record.firstName }} stays in payroll for a period that
+          begins on or before this date, and drops out afterwards.
+        </p>
+
+        @if (deactivateError(); as message) {
+          <p class="alert alert--error" role="alert">{{ message }}</p>
+        }
+
+        <form class="exit__form" [formGroup]="exitForm" (ngSubmit)="deactivate()" novalidate>
+          <div class="field exit__field">
+            <label class="field__label" for="exitDate">Exit date</label>
+            <input
+              id="exitDate"
+              class="input"
+              [class.input--invalid]="exitDateError()"
+              type="date"
+              formControlName="exitDate"
+              required
+              [attr.aria-invalid]="!!exitDateError()"
+              [attr.aria-describedby]="exitDateError() ? 'exitDate-error' : 'exitDate-hint'"
+            />
+            @if (exitDateError(); as message) {
+              <p class="field__error" id="exitDate-error">{{ message }}</p>
+            } @else {
+              <p class="field__hint" id="exitDate-hint">
+                Their last working day. May be in the future when notice has been served.
+              </p>
+            }
+          </div>
+          <button class="button button--primary" type="submit" [disabled]="deactivating()">
+            {{ deactivating() ? 'Recording…' : 'Confirm exit' }}
+          </button>
+        </form>
+      </section>
+    }
 
     <!--
       A description list, not a table: these are name/value pairs about one record, and a

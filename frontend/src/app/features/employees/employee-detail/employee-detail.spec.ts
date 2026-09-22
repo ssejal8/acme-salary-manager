@@ -32,11 +32,16 @@ describe('EmployeeDetail', () => {
   /** Employee ids the embedded salary history asked for. */
   let structureRequests: number[];
   let getResult: () => Observable<EmployeeSummary>;
+  let deactivateCalls: { id: number; exitDate: string }[];
+  let deactivateResult: () => Observable<EmployeeSummary>;
 
   beforeEach(() => {
     requestedIds = [];
     structureRequests = [];
+    deactivateCalls = [];
     getResult = () => of(employee());
+    deactivateResult = () =>
+      of(employee({ status: 'INACTIVE', exitDate: '2026-08-31' }));
 
     TestBed.configureTestingModule({
       providers: [
@@ -47,6 +52,10 @@ describe('EmployeeDetail', () => {
             get: (id: number) => {
               requestedIds.push(id);
               return getResult();
+            },
+            deactivate: (id: number, request: { exitDate: string }) => {
+              deactivateCalls.push({ id, exitDate: request.exitDate });
+              return deactivateResult();
             },
           },
         },
@@ -228,5 +237,136 @@ describe('EmployeeDetail', () => {
 
     const breadcrumb = (fixture.nativeElement as HTMLElement).querySelector('.breadcrumb__link');
     expect(breadcrumb?.getAttribute('href')).toBe('/employees');
+  });
+
+  it('links to the edit screen for this employee', async () => {
+    await createComponent('1001');
+
+    const edit = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('a'),
+    ).find((link) => link.textContent?.trim() === 'Edit');
+    expect(edit?.getAttribute('href')).toBe('/employees/1001/edit');
+  });
+
+  /** Recording an exit (FR-2.5). */
+  describe('recording an exit', () => {
+    async function openExitForm(): Promise<void> {
+      component.toggleExitForm();
+      await settle();
+    }
+
+    async function settle(): Promise<void> {
+      await fixture.whenStable();
+      fixture.detectChanges();
+    }
+
+    it('is offered for an active employee and hidden for a leaver', async () => {
+      await createComponent();
+      expect(text()).toContain('Record exit');
+
+      getResult = () => of(employee({ status: 'INACTIVE', exitDate: '2026-03-31' }));
+      await createComponent();
+
+      expect(text()).not.toContain('Record exit');
+    });
+
+    it('does not submit without a date', async () => {
+      // Never defaulted to today: payroll eligibility is derived from it (FR-2.6).
+      await createComponent();
+      await openExitForm();
+
+      component.deactivate();
+
+      expect(deactivateCalls).toEqual([]);
+      expect(component.exitDateError()).toBe('This is required');
+    });
+
+    it('sends the date for this employee', async () => {
+      await createComponent('1001');
+      await openExitForm();
+      component.exitForm.setValue({ exitDate: '2026-08-31' });
+
+      component.deactivate();
+      await settle();
+
+      expect(deactivateCalls).toEqual([{ id: 1001, exitDate: '2026-08-31' }]);
+    });
+
+    it('shows the exit on the record without refetching it', async () => {
+      // The response carries the stored record, so a second GET would be a round trip for
+      // something already in hand.
+      await createComponent('1001');
+      await openExitForm();
+      component.exitForm.setValue({ exitDate: '2026-08-31' });
+
+      component.deactivate();
+      await settle();
+
+      expect(text()).toContain('Left 31 Aug 2026');
+      expect(requestedIds).toEqual([1001]);
+      expect(text()).not.toContain('Record exit');
+    });
+
+    it("shows the server's refusal for someone who has already left", async () => {
+      deactivateResult = () =>
+        throwError(() => new ApiFailure(409, 'Employee E-1001 already left on 2026-03-31'));
+      await createComponent();
+      await openExitForm();
+      component.exitForm.setValue({ exitDate: '2026-08-31' });
+
+      component.deactivate();
+      await settle();
+
+      expect(component.deactivateError()).toContain('already left');
+      expect(text()).toContain('already left on 2026-03-31');
+      // Still active on screen, because the exit was refused.
+      expect(text()).toContain('Active');
+    });
+
+    it("shows the server's field error against the date", async () => {
+      deactivateResult = () =>
+        throwError(
+          () =>
+            new ApiFailure(400, 'Validation failed', [
+              { field: 'exitDate', message: 'must not precede the date of joining' },
+            ]),
+        );
+      await createComponent();
+      await openExitForm();
+      component.exitForm.setValue({ exitDate: '2020-01-01' });
+
+      component.deactivate();
+      await settle();
+
+      expect(component.exitDateError()).toContain('must not precede the date of joining');
+    });
+
+    it('ignores a second submit while one is in flight', async () => {
+      deactivateResult = () => new Observable<EmployeeSummary>(() => undefined);
+      await createComponent();
+      await openExitForm();
+      component.exitForm.setValue({ exitDate: '2026-08-31' });
+
+      component.deactivate();
+      component.deactivate();
+
+      expect(deactivateCalls).toHaveLength(1);
+    });
+
+    it('forgets the outcome when the route moves to another employee', async () => {
+      await createComponent('1001');
+      await openExitForm();
+      component.exitForm.setValue({ exitDate: '2026-08-31' });
+      component.deactivate();
+      await settle();
+      expect(text()).toContain('Left 31 Aug 2026');
+
+      fixture.componentRef.setInput('id', '1002');
+      await settle();
+
+      // Otherwise the next employee would appear to have left on this one's date.
+      expect(text()).not.toContain('Left 31 Aug 2026');
+      expect(text()).toContain('Active');
+    });
   });
 });

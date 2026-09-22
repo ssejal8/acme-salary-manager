@@ -13,9 +13,14 @@
 }
 
 .page-header__meta {
-  margin: 0;
+  margin: var(--space-1) 0 0;
   color: var(--colour-text-muted);
   font-size: 0.875rem;
+}
+
+/* An anchor styled as a button: it navigates, so it stays a link (WCAG 4.1.2). */
+.page-header__action {
+  text-decoration: none;
 }
 
 .filters {

@@ -1,14 +1,19 @@
 <header class="page-header">
-  <h1 class="page-header__title">Employees</h1>
-  <p class="page-header__meta">
-    @if (loaded()) {
-      @if (page().totalElements > 0) {
-        Showing {{ range().from }}–{{ range().to }} of {{ page().totalElements }}
-      } @else {
-        No matching employees
+  <div>
+    <h1 class="page-header__title">Employees</h1>
+    <p class="page-header__meta">
+      @if (loaded()) {
+        @if (page().totalElements > 0) {
+          Showing {{ range().from }}–{{ range().to }} of {{ page().totalElements }}
+        } @else {
+          No matching employees
+        }
       }
-    }
-  </p>
+    </p>
+  </div>
+  <a class="button button--primary button--compact page-header__action" routerLink="/employees/new">
+    Add employee
+  </a>
 </header>
 
 @if (errorMessage(); as message) {

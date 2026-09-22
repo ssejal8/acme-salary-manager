@@ -1,0 +1,259 @@
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a class="breadcrumb__link" routerLink="/employees">Employees</a>
+  <span class="breadcrumb__separator" aria-hidden="true">/</span>
+  @if (existing(); as record) {
+    <a class="breadcrumb__link" [routerLink]="['/employees', record.id]">{{ record.fullName }}</a>
+    <span class="breadcrumb__separator" aria-hidden="true">/</span>
+    <span>Edit</span>
+  } @else {
+    <span>New employee</span>
+  }
+</nav>
+
+<header class="page-header">
+  <div>
+    <h1 class="page-header__title">
+      {{ editing() ? 'Edit employee' : 'Add an employee' }}
+    </h1>
+    <p class="page-header__subtitle">
+      @if (editing()) {
+        The employee code and date of joining cannot be changed — see below for why.
+      } @else {
+        A new record starts as active. Compensation is assigned separately, once the record
+        exists.
+      }
+    </p>
+  </div>
+</header>
+
+@if (loadError(); as message) {
+  <p class="alert alert--error" role="alert">{{ message }}</p>
+}
+
+@if (generalError(); as message) {
+  <p class="alert alert--error" role="alert">{{ message }}</p>
+}
+
+@if (!loading() && !loadError() && references(); as data) {
+  <section class="card form" aria-labelledby="form-heading">
+    <h2 class="visually-hidden" id="form-heading">Employee details</h2>
+
+    <form class="form__grid" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+      @if (editing()) {
+        <!--
+          Read-only facts rather than disabled inputs. A greyed-out box invites "why can't
+          I?"; a value with the reason beneath it answers the question instead (FR-2.3).
+        -->
+        <div class="form__fixed">
+          <p class="form__fixed-item">
+            <span class="field__label">Employee code</span>
+            <span class="code">{{ existing()?.employeeCode }}</span>
+          </p>
+          <p class="form__fixed-item">
+            <span class="field__label">Date of joining</span>
+            <span>{{ existing()?.dateOfJoining | isoDate }}</span>
+          </p>
+          <p class="field__hint form__fixed-note">
+            Neither can change: the code appears on published payslips, and the joining date
+            is what every salary revision is validated against.
+          </p>
+        </div>
+      } @else {
+        <div class="field">
+          <label class="field__label" for="employeeCode">Employee code</label>
+          <input
+            id="employeeCode"
+            class="input code"
+            [class.input--invalid]="fieldError('employeeCode')"
+            type="text"
+            formControlName="employeeCode"
+            (blur)="trim('employeeCode')"
+            maxlength="20"
+            autocapitalize="characters"
+            autocomplete="off"
+            required
+            [attr.aria-invalid]="!!fieldError('employeeCode')"
+            [attr.aria-describedby]="
+              fieldError('employeeCode') ? 'employeeCode-error' : 'employeeCode-hint'
+            "
+          />
+          @if (fieldError('employeeCode'); as message) {
+            <p class="field__error" id="employeeCode-error">{{ message }}</p>
+          } @else {
+            <p class="field__hint" id="employeeCode-hint">
+              Stored uppercased. Must be unique, and cannot be changed later.
+            </p>
+          }
+        </div>
+
+        <div class="field">
+          <label class="field__label" for="dateOfJoining">Date of joining</label>
+          <input
+            id="dateOfJoining"
+            class="input"
+            [class.input--invalid]="fieldError('dateOfJoining')"
+            type="date"
+            formControlName="dateOfJoining"
+            required
+            [attr.aria-invalid]="!!fieldError('dateOfJoining')"
+            [attr.aria-describedby]="
+              fieldError('dateOfJoining') ? 'dateOfJoining-error' : 'dateOfJoining-hint'
+            "
+          />
+          @if (fieldError('dateOfJoining'); as message) {
+            <p class="field__error" id="dateOfJoining-error">{{ message }}</p>
+          } @else {
+            <p class="field__hint" id="dateOfJoining-hint">
+              May be in the future — a new hire starting next month is recorded now.
+            </p>
+          }
+        </div>
+      }
+
+      <div class="field">
+        <label class="field__label" for="firstName">First name</label>
+        <input
+          id="firstName"
+          class="input"
+          [class.input--invalid]="fieldError('firstName')"
+          type="text"
+          formControlName="firstName"
+          (blur)="trim('firstName')"
+          maxlength="80"
+          autocomplete="off"
+          required
+          [attr.aria-invalid]="!!fieldError('firstName')"
+          [attr.aria-describedby]="fieldError('firstName') ? 'firstName-error' : null"
+        />
+        @if (fieldError('firstName'); as message) {
+          <p class="field__error" id="firstName-error">{{ message }}</p>
+        }
+      </div>
+
+      <div class="field">
+        <label class="field__label" for="lastName">Last name</label>
+        <input
+          id="lastName"
+          class="input"
+          [class.input--invalid]="fieldError('lastName')"
+          type="text"
+          formControlName="lastName"
+          (blur)="trim('lastName')"
+          maxlength="80"
+          autocomplete="off"
+          required
+          [attr.aria-invalid]="!!fieldError('lastName')"
+          [attr.aria-describedby]="fieldError('lastName') ? 'lastName-error' : null"
+        />
+        @if (fieldError('lastName'); as message) {
+          <p class="field__error" id="lastName-error">{{ message }}</p>
+        }
+      </div>
+
+      <div class="field form__field--wide">
+        <label class="field__label" for="workEmail">Work email</label>
+        <input
+          id="workEmail"
+          class="input"
+          [class.input--invalid]="fieldError('workEmail')"
+          type="email"
+          formControlName="workEmail"
+          (blur)="trim('workEmail')"
+          maxlength="255"
+          autocomplete="off"
+          required
+          [attr.aria-invalid]="!!fieldError('workEmail')"
+          [attr.aria-describedby]="fieldError('workEmail') ? 'workEmail-error' : 'workEmail-hint'"
+        />
+        @if (fieldError('workEmail'); as message) {
+          <p class="field__error" id="workEmail-error">{{ message }}</p>
+        } @else {
+          <p class="field__hint" id="workEmail-hint">
+            Stored lowercased, and unique across the organisation — it doubles as the login
+            username.
+          </p>
+        }
+      </div>
+
+      <div class="field">
+        <label class="field__label" for="departmentId">Department</label>
+        <select
+          id="departmentId"
+          class="select"
+          [class.select--invalid]="fieldError('departmentId')"
+          formControlName="departmentId"
+          required
+          [attr.aria-invalid]="!!fieldError('departmentId')"
+          [attr.aria-describedby]="fieldError('departmentId') ? 'departmentId-error' : null"
+        >
+          <option [ngValue]="null" disabled>Choose a department</option>
+          @for (department of data.departments; track department.id) {
+            <option [ngValue]="department.id">{{ department.name }}</option>
+          }
+        </select>
+        @if (fieldError('departmentId'); as message) {
+          <p class="field__error" id="departmentId-error">{{ message }}</p>
+        }
+      </div>
+
+      <div class="field">
+        <label class="field__label" for="designationId">Designation</label>
+        <select
+          id="designationId"
+          class="select"
+          [class.select--invalid]="fieldError('designationId')"
+          formControlName="designationId"
+          required
+          [attr.aria-invalid]="!!fieldError('designationId')"
+          [attr.aria-describedby]="fieldError('designationId') ? 'designationId-error' : null"
+        >
+          <option [ngValue]="null" disabled>Choose a designation</option>
+          @for (designation of data.designations; track designation.id) {
+            <option [ngValue]="designation.id">{{ designation.title }}</option>
+          }
+        </select>
+        @if (fieldError('designationId'); as message) {
+          <p class="field__error" id="designationId-error">{{ message }}</p>
+        }
+      </div>
+
+      <div class="field">
+        <label class="field__label" for="gradeId">Grade</label>
+        <select
+          id="gradeId"
+          class="select"
+          [class.select--invalid]="fieldError('gradeId')"
+          formControlName="gradeId"
+          required
+          [attr.aria-invalid]="!!fieldError('gradeId')"
+          [attr.aria-describedby]="fieldError('gradeId') ? 'gradeId-error' : 'gradeId-hint'"
+        >
+          <option [ngValue]="null" disabled>Choose a grade</option>
+          @for (grade of data.grades; track grade.id) {
+            <option [ngValue]="grade.id">{{ grade.name }}</option>
+          }
+        </select>
+        @if (fieldError('gradeId'); as message) {
+          <p class="field__error" id="gradeId-error">{{ message }}</p>
+        } @else {
+          <p class="field__hint" id="gradeId-hint">
+            The grade carries the CTC band a compensation package is checked against.
+          </p>
+        }
+      </div>
+
+      <div class="form__actions">
+        <button class="button button--primary" type="submit" [disabled]="saving()">
+          @if (saving()) {
+            Saving…
+          } @else {
+            {{ editing() ? 'Save changes' : 'Create employee' }}
+          }
+        </button>
+        <a class="button button--secondary" [routerLink]="cancelTarget()">Cancel</a>
+      </div>
+    </form>
+  </section>
+} @else if (loading()) {
+  <p class="card form form__loading" role="status">Loading…</p>
+}
