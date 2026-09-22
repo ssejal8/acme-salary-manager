@@ -44,11 +44,32 @@ export const routes: Routes = [
               ),
           },
           {
+            // Before `:id`, and it has to stay there: routes match in order, so declared
+            // after it this would resolve as the detail screen for an employee called
+            // "new".
+            path: 'new',
+            title: 'Add employee · ACME Salary Management',
+            loadComponent: () =>
+              import('./features/employees/employee-form/employee-form').then(
+                (m) => m.EmployeeForm,
+              ),
+          },
+          {
             path: ':id',
             title: 'Employee · ACME Salary Management',
             loadComponent: () =>
               import('./features/employees/employee-detail/employee-detail').then(
                 (m) => m.EmployeeDetail,
+              ),
+          },
+          {
+            // Two segments, so there is no ambiguity with `:id` above. The same component
+            // as `new`: the two screens differ by two fields and a verb.
+            path: ':id/edit',
+            title: 'Edit employee · ACME Salary Management',
+            loadComponent: () =>
+              import('./features/employees/employee-form/employee-form').then(
+                (m) => m.EmployeeForm,
               ),
           },
           {
@@ -80,18 +101,31 @@ export const routes: Routes = [
           import('./features/payslips/payslip-view/payslip-view').then((m) => m.PayslipView),
       },
       {
-        // ADMIN/HR, matching the endpoint: a draft run holds every salary in the
-        // organisation, so this is not a screen to leave reachable by an employee.
-        //
-        // `payroll-runs/new` rather than `payroll-runs`, because starting a run is not
-        // the collection: the list and the review screen belong on the paths the API
-        // already uses for them, and taking the bare path for a form would mean moving it
-        // later.
-        path: 'payroll-runs/new',
-        title: 'Run payroll · ACME Salary Management',
+        // ADMIN/HR throughout, matching the endpoints: a draft run holds every salary in
+        // the organisation, so none of this is reachable by an employee.
+        path: 'payroll-runs',
         canActivate: [roleGuard('ADMIN', 'HR')],
-        loadComponent: () =>
-          import('./features/payroll/start-run/start-run').then((m) => m.StartRun),
+        children: [
+          {
+            path: '',
+            title: 'Payroll runs · ACME Salary Management',
+            loadComponent: () =>
+              import('./features/payroll/run-list/run-list').then((m) => m.RunList),
+          },
+          {
+            // Before `:id`, as with employees: routes match in order.
+            path: 'new',
+            title: 'Run payroll · ACME Salary Management',
+            loadComponent: () =>
+              import('./features/payroll/start-run/start-run').then((m) => m.StartRun),
+          },
+          {
+            path: ':id',
+            title: 'Payroll run · ACME Salary Management',
+            loadComponent: () =>
+              import('./features/payroll/run-review/run-review').then((m) => m.RunReview),
+          },
+        ],
       },
       {
         path: 'reports/compensation',

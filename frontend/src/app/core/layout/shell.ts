@@ -50,9 +50,10 @@ export class Shell {
     },
     {
       // The same ADMIN/HR pair as the employee screens, which is what the payroll-run
-      // endpoints authorise.
-      path: '/payroll-runs/new',
-      label: 'Run payroll',
+      // endpoints authorise. Points at the list rather than at the start form: the
+      // common visit is to check or finish a run, not to begin another one.
+      path: '/payroll-runs',
+      label: 'Payroll',
       available: this.auth.canManageEmployees(),
     },
     {
