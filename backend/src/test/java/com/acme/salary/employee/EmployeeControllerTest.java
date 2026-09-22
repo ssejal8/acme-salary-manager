@@ -2,20 +2,30 @@ package com.acme.salary.employee;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.acme.salary.common.error.ConflictException;
 import com.acme.salary.common.web.PageResponse;
 import com.acme.salary.common.web.PageableSanitizer;
 import com.acme.salary.config.SecurityConfig;
 import com.acme.salary.employee.EmployeeSearch.StatusFilter;
+import com.acme.salary.employee.dto.CreateEmployeeRequest;
 import com.acme.salary.employee.dto.EmployeeSummaryResponse;
+import com.acme.salary.employee.dto.UpdateEmployeeRequest;
 import com.acme.salary.support.ApiSecurityTestConfig;
 import com.acme.salary.support.EmployeeFixtures;
+import java.time.LocalDate;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
@@ -24,6 +34,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithAnonymousUser;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -52,6 +63,12 @@ class EmployeeControllerTest {
 
     @Captor
     private ArgumentCaptor<Pageable> pageableCaptor;
+
+    @Captor
+    private ArgumentCaptor<CreateEmployeeRequest> createCaptor;
+
+    @Captor
+    private ArgumentCaptor<UpdateEmployeeRequest> updateCaptor;
 
     private static PageResponse<EmployeeSummaryResponse> onePage() {
         return new PageResponse<>(
@@ -205,5 +222,213 @@ class EmployeeControllerTest {
         mockMvc.perform(get("/api/v1/employees/1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.employeeCode").value("E-001"));
+    }
+
+    private static final String CREATE_BODY = """
+            {
+              "employeeCode": "E-050",
+              "firstName": "Asha",
+              "lastName": "Menon",
+              "workEmail": "asha.menon@acme.test",
+              "dateOfJoining": "2026-04-01",
+              "departmentId": 10,
+              "designationId": 20,
+              "gradeId": 30
+            }""";
+
+    /** Creating a record (FR-2.1, FR-2.2). */
+    @Nested
+    @DisplayName("POST /employees")
+    class Create {
+
+        @Test
+        @WithMockUser(roles = "HR")
+        void answers201WithTheLocationOfTheNewRecord() throws Exception {
+            when(employees.create(any())).thenReturn(EmployeeSummaryResponse.from(
+                    EmployeeFixtures.employee(7L, "E-050", "Asha", "Menon")));
+
+            mockMvc.perform(post("/api/v1/employees")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(CREATE_BODY))
+                    .andExpect(status().isCreated())
+                    .andExpect(header().string("Location", "/api/v1/employees/7"))
+                    .andExpect(jsonPath("$.employeeCode").value("E-050"))
+                    .andExpect(jsonPath("$.status").value("ACTIVE"));
+        }
+
+        @Test
+        @WithMockUser(roles = "HR")
+        void bindsEveryFieldOntoTheRequest() throws Exception {
+            when(employees.create(createCaptor.capture())).thenReturn(EmployeeSummaryResponse.from(
+                    EmployeeFixtures.employee(7L, "E-050", "Asha", "Menon")));
+
+            mockMvc.perform(post("/api/v1/employees")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(CREATE_BODY))
+                    .andExpect(status().isCreated());
+
+            CreateEmployeeRequest request = createCaptor.getValue();
+            assertThat(request.employeeCode()).isEqualTo("E-050");
+            assertThat(request.workEmail()).isEqualTo("asha.menon@acme.test");
+            assertThat(request.dateOfJoining()).isEqualTo(LocalDate.of(2026, 4, 1));
+            assertThat(request.departmentId()).isEqualTo(10L);
+            assertThat(request.designationId()).isEqualTo(20L);
+            assertThat(request.gradeId()).isEqualTo(30L);
+        }
+
+        @Test
+        @WithMockUser(roles = "HR")
+        void rejectsAnIncompleteBodyNamingTheMissingFields() throws Exception {
+            mockMvc.perform(post("/api/v1/employees")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"firstName\": \"Asha\"}"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.status").value(400))
+                    .andExpect(jsonPath("$.fieldErrors").isArray());
+        }
+
+        @Test
+        @WithMockUser(roles = "HR")
+        void surfacesADuplicateAsA409AgainstTheField() throws Exception {
+            // FR-2.2 asks for a field-level message, so the form can mark the control
+            // rather than making the user guess which of the two values is taken.
+            when(employees.create(any())).thenThrow(ConflictException.field(
+                    "employeeCode", "employee code E-050 is already in use"));
+
+            mockMvc.perform(post("/api/v1/employees")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(CREATE_BODY))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.status").value(409))
+                    .andExpect(jsonPath("$.fieldErrors[0].field").value("employeeCode"))
+                    .andExpect(jsonPath("$.fieldErrors[0].message").value(
+                            "employee code E-050 is already in use"));
+        }
+
+        @Test
+        @WithMockUser(roles = "EMPLOYEE")
+        void anEmployeeMayNotCreateAnyone() throws Exception {
+            mockMvc.perform(post("/api/v1/employees")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(CREATE_BODY))
+                    .andExpect(status().isForbidden());
+        }
+
+        @Test
+        @WithAnonymousUser
+        void anUnauthenticatedCallerGets401() throws Exception {
+            mockMvc.perform(post("/api/v1/employees")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(CREATE_BODY))
+                    .andExpect(status().isUnauthorized());
+        }
+    }
+
+    /** Updating the editable fields (FR-2.3). */
+    @Nested
+    @DisplayName("PUT /employees/{id}")
+    class Update {
+
+        private static final String BODY = """
+                {
+                  "firstName": "Asha",
+                  "lastName": "Menon-Rao",
+                  "workEmail": "asha.rao@acme.test",
+                  "departmentId": 10,
+                  "designationId": 20,
+                  "gradeId": 30
+                }""";
+
+        @Test
+        @WithMockUser(roles = "HR")
+        void answers200WithTheUpdatedRecord() throws Exception {
+            when(employees.update(eq(1L), any())).thenReturn(EmployeeSummaryResponse.from(
+                    EmployeeFixtures.employee(1L, "E-001", "Asha", "Menon-Rao")));
+
+            mockMvc.perform(put("/api/v1/employees/1")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(BODY))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.lastName").value("Menon-Rao"));
+        }
+
+        @Test
+        @WithMockUser(roles = "HR")
+        void ignoresAnImmutableFieldSentByAClient() throws Exception {
+            // FR-2.3: the code and joining date are not part of the request record, so
+            // Jackson has nowhere to put them. Sending them is not an error and not an
+            // update either — the request simply does not carry them.
+            when(employees.update(eq(1L), updateCaptor.capture())).thenReturn(
+                    EmployeeSummaryResponse.from(
+                            EmployeeFixtures.employee(1L, "E-001", "Asha", "Menon")));
+
+            mockMvc.perform(put("/api/v1/employees/1")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {
+                                      "firstName": "Asha",
+                                      "lastName": "Menon",
+                                      "workEmail": "asha.menon@acme.test",
+                                      "departmentId": 10,
+                                      "designationId": 20,
+                                      "gradeId": 30
+                                    }"""))
+                    .andExpect(status().isOk());
+
+            assertThat(updateCaptor.getValue().firstName()).isEqualTo("Asha");
+        }
+
+        @Test
+        @WithMockUser(roles = "EMPLOYEE")
+        void anEmployeeMayNotUpdateAnyone() throws Exception {
+            mockMvc.perform(put("/api/v1/employees/1")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(BODY))
+                    .andExpect(status().isForbidden());
+        }
+    }
+
+    /** Recording an exit (FR-2.5). */
+    @Nested
+    @DisplayName("POST /employees/{id}/deactivate")
+    class Deactivate {
+
+        private static final String BODY = "{\"exitDate\": \"2026-08-31\"}";
+
+        @Test
+        @WithMockUser(roles = "HR")
+        void answers200WithTheDeactivatedRecord() throws Exception {
+            Employee left = EmployeeFixtures.employee(1L, "E-001", "Asha", "Menon");
+            left.deactivate(LocalDate.of(2026, 8, 31));
+            when(employees.deactivate(eq(1L), any()))
+                    .thenReturn(EmployeeSummaryResponse.from(left));
+
+            mockMvc.perform(post("/api/v1/employees/1/deactivate")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(BODY))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("INACTIVE"))
+                    .andExpect(jsonPath("$.exitDate").value("2026-08-31"));
+        }
+
+        @Test
+        @WithMockUser(roles = "HR")
+        void requiresAnExitDate() throws Exception {
+            // Not defaulted to today: payroll eligibility is derived from it (FR-2.6).
+            mockMvc.perform(post("/api/v1/employees/1/deactivate")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.fieldErrors[0].field").value("exitDate"));
+        }
+
+        @Test
+        @WithMockUser(roles = "EMPLOYEE")
+        void anEmployeeMayNotDeactivateAnyone() throws Exception {
+            mockMvc.perform(post("/api/v1/employees/1/deactivate")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(BODY))
+                    .andExpect(status().isForbidden());
+        }
     }
 }

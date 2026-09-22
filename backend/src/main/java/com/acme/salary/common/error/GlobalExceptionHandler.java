@@ -93,9 +93,17 @@ public class GlobalExceptionHandler {
         return respond(HttpStatus.NOT_FOUND, "No endpoint matches this path", request, List.of());
     }
 
+    /**
+     * A conflict may or may not be attributable to a field: a duplicate work email is
+     * (FR-2.2), a period that already has a payroll run is not. Whatever the exception
+     * carried is passed through, so the envelope stays the one contract clients parse.
+     */
     @ExceptionHandler({ConflictException.class, IllegalStateTransitionException.class})
     public ResponseEntity<ApiError> onConflict(RuntimeException ex, HttpServletRequest request) {
-        return respond(HttpStatus.CONFLICT, ex.getMessage(), request, List.of());
+        List<ApiError.FieldError> fieldErrors = ex instanceof ConflictException conflict
+                ? conflict.fieldErrors()
+                : List.of();
+        return respond(HttpStatus.CONFLICT, ex.getMessage(), request, fieldErrors);
     }
 
     /**
