@@ -1,0 +1,255 @@
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a class="breadcrumb__link" routerLink="/payroll-runs">Payroll runs</a>
+  <span class="breadcrumb__separator" aria-hidden="true">/</span>
+  <span>{{ run() ? (run()! | period) : 'Run' }}</span>
+</nav>
+
+@if (loadError(); as message) {
+  <p class="alert alert--error" role="alert">{{ message }}</p>
+}
+
+@if (actionError(); as message) {
+  <p class="alert alert--error" role="alert">{{ message }}</p>
+}
+
+@if (outcome(); as message) {
+  <p class="alert alert--info" role="status">{{ message }}</p>
+}
+
+@if (run(); as run) {
+  <article class="card summary">
+    <header class="summary__header">
+      <div>
+        <p class="summary__label">Payroll run</p>
+        <h1 class="summary__period">{{ run | period }}</h1>
+      </div>
+      <span class="badge" [class]="run.status === 'FINALISED' ? 'badge--active' : 'badge--inactive'">
+        {{ run.status }}
+      </span>
+    </header>
+
+    <p class="summary__note">
+      @switch (run.status) {
+        @case ('DRAFT') {
+          Nothing here has reached an employee yet. Finalising publishes these exact
+          figures — a run is never recomputed at finalisation, which is what makes this
+          review worth doing.
+        }
+        @case ('FINALISED') {
+          Published and immutable. A correction means cancelling nothing and running a
+          fresh period; this month cannot be edited or re-run.
+        }
+        @case ('CANCELLED') {
+          Abandoned. Its payslips stay on record as what was computed, unpublished, and
+          the period is free to be run again.
+        }
+      }
+    </p>
+
+    <dl class="figures">
+      <div class="figures__item">
+        <dt class="figures__label">Employees</dt>
+        <dd class="figures__value numeric">{{ run.employeeCount }}</dd>
+      </div>
+      <div class="figures__item">
+        <dt class="figures__label">Gross</dt>
+        <dd class="figures__value numeric">{{ run.totalGross | money }}</dd>
+      </div>
+      <div class="figures__item">
+        <dt class="figures__label">Deductions</dt>
+        <dd class="figures__value numeric">{{ run.totalDeductions | money }}</dd>
+      </div>
+      <div class="figures__item figures__item--emphasis">
+        <dt class="figures__label">Net payable</dt>
+        <dd class="figures__value numeric">{{ run.totalNet | money }}</dd>
+      </div>
+    </dl>
+
+    @if (isDraft()) {
+      <div class="summary__actions">
+        <button
+          type="button"
+          class="button button--secondary"
+          [disabled]="working() || !hasPendingEdits()"
+          (click)="recompute()"
+        >
+          {{ working() ? 'Working…' : 'Recompute' }}
+        </button>
+        <button
+          type="button"
+          class="button button--primary"
+          [disabled]="working()"
+          (click)="confirm('finalise')"
+        >
+          Finalise and publish
+        </button>
+        <button
+          type="button"
+          class="button button--secondary"
+          [disabled]="working()"
+          (click)="confirm('cancel')"
+        >
+          Cancel run
+        </button>
+        @if (hasPendingEdits()) {
+          <p class="summary__pending" role="status">
+            Loss-of-pay edits are not applied until you recompute.
+          </p>
+        }
+      </div>
+    }
+  </article>
+
+  <!--
+    Two clicks for anything irreversible, and the confirmation says what will happen in
+    the words of the thing that will happen rather than asking "are you sure?".
+  -->
+  @if (pendingAction() === 'finalise') {
+    <section class="card confirm confirm--publish" role="alertdialog" aria-labelledby="confirm-heading">
+      <h2 class="confirm__title" id="confirm-heading">Publish {{ run | period }}?</h2>
+      <p class="confirm__body">
+        {{ run.employeeCount }} payslips totalling {{ run.totalNet | money }} become visible
+        to the employees they belong to. This cannot be undone — a correction means running
+        a later period, not editing this one.
+      </p>
+      <div class="confirm__actions">
+        <button
+          type="button"
+          class="button button--primary"
+          [disabled]="working()"
+          (click)="finalise()"
+        >
+          {{ working() ? 'Publishing…' : 'Yes, publish these payslips' }}
+        </button>
+        <button type="button" class="button button--secondary" (click)="dismissConfirmation()">
+          Keep reviewing
+        </button>
+      </div>
+    </section>
+  }
+
+  @if (pendingAction() === 'cancel') {
+    <section class="card confirm" role="alertdialog" aria-labelledby="cancel-heading">
+      <h2 class="confirm__title" id="cancel-heading">Abandon this draft?</h2>
+      <p class="confirm__body">
+        The {{ run | period }} draft is abandoned and the period becomes free to run again.
+        Its payslips stay on record as what was computed, unpublished.
+      </p>
+      <div class="confirm__actions">
+        <button
+          type="button"
+          class="button button--primary"
+          [disabled]="working()"
+          (click)="cancelRun()"
+        >
+          {{ working() ? 'Cancelling…' : 'Yes, cancel the run' }}
+        </button>
+        <button type="button" class="button button--secondary" (click)="dismissConfirmation()">
+          Keep the draft
+        </button>
+      </div>
+    </section>
+  }
+
+  <section class="card payslips-card" aria-labelledby="payslips-heading">
+    <header class="payslips-card__header">
+      <div>
+        <h2 class="section__title" id="payslips-heading">Payslips</h2>
+        <p class="section__note">
+          @if (isDraft()) {
+            Enter unpaid days against anyone who had them, then recompute. Earnings are
+            prorated over the month; fixed statutory deductions are not.
+          } @else {
+            One row per employee included in the run.
+          }
+        </p>
+      </div>
+      @if (shownRows().total > 0) {
+        <p class="payslips-card__count">
+          Showing {{ shownRows().from }}–{{ shownRows().to }} of {{ shownRows().total }}
+        </p>
+      }
+    </header>
+
+    <div class="table-scroll" tabindex="0" role="region" aria-label="Payslips table">
+      <table class="payslips">
+        <thead>
+          <tr>
+            <th scope="col">Employee</th>
+            <th scope="col" class="payslips__days">Paid days</th>
+            <th scope="col" class="payslips__days">Unpaid days</th>
+            <th scope="col" class="payslips__amount">Gross</th>
+            <th scope="col" class="payslips__amount">Deductions</th>
+            <th scope="col" class="payslips__amount">Net pay</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (payslip of visiblePayslips(); track payslip.id) {
+            <tr>
+              <!--
+                By id, because that is all a run's payslip carries — it names its employee
+                by reference and leaves resolving the name to whoever needs it.
+              -->
+              <th scope="row" class="payslips__employee code">#{{ payslip.employeeId }}</th>
+              <td class="numeric">{{ payslip.paidDays }} / {{ payslip.totalDays }}</td>
+              <td class="payslips__days">
+                @if (isDraft()) {
+                  <input
+                    class="input payslips__lop numeric"
+                    type="number"
+                    inputmode="numeric"
+                    min="0"
+                    [max]="payslip.totalDays"
+                    [value]="lopFor(payslip.employeeId)"
+                    [disabled]="working()"
+                    (input)="setLop(payslip.employeeId, $any($event.target).value, payslip.totalDays)"
+                  />
+                  <span class="visually-hidden">
+                    Unpaid days for employee {{ payslip.employeeId }}
+                  </span>
+                } @else {
+                  <span class="numeric">{{ payslip.lopDays }}</span>
+                }
+              </td>
+              <td class="numeric">{{ payslip.grossPay | money }}</td>
+              <td class="numeric">{{ payslip.totalDeductions | money }}</td>
+              <td class="numeric payslips__net">{{ payslip.netPay | money }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    @if (totalRowPages() > 1) {
+      <nav class="pager" aria-label="Payslip pagination">
+        <button
+          type="button"
+          class="button button--secondary button--compact"
+          [disabled]="rowsPage() === 0"
+          (click)="showRowPage(rowsPage() - 1)"
+        >
+          Previous
+        </button>
+        <span class="pager__position">
+          Page {{ rowsPage() + 1 }} of {{ totalRowPages() }}
+        </span>
+        <button
+          type="button"
+          class="button button--secondary button--compact"
+          [disabled]="rowsPage() + 1 >= totalRowPages()"
+          (click)="showRowPage(rowsPage() + 1)"
+        >
+          Next
+        </button>
+      </nav>
+
+      <!-- Named rather than hidden: the payload is still the whole run. -->
+      <p class="payslips-card__caveat">
+        These pages are split in the browser — the API returns the whole run in one
+        response, so a paged payslip endpoint is still outstanding work.
+      </p>
+    }
+  </section>
+} @else if (!loading() && !loadError()) {
+  <p class="alert alert--error" role="alert">This payroll run could not be found.</p>
+}

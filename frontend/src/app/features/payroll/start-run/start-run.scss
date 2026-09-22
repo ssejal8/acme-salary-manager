@@ -1,3 +1,23 @@
+.breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+.breadcrumb__link {
+  color: var(--colour-accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.breadcrumb__link:hover {
+  text-decoration: underline;
+}
+
 .page-header {
   display: flex;
   flex-wrap: wrap;
@@ -19,8 +39,7 @@
   max-width: 44rem;
 }
 
-.start,
-.result {
+.start {
   padding: var(--space-4);
   margin-bottom: var(--space-4);
 }
@@ -83,127 +102,4 @@
 
 .start__facts li + li {
   margin-top: var(--space-2);
-}
-
-.result__header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
-
-.result__label {
-  margin: 0;
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--colour-text-muted);
-}
-
-.result__period {
-  margin: var(--space-1) 0 0;
-  font-size: 1.5rem;
-  font-weight: 700;
-}
-
-.result__note,
-.result__pending {
-  margin: var(--space-3) 0 0;
-  max-width: 44rem;
-  color: var(--colour-text-muted);
-  font-size: 0.875rem;
-}
-
-.result__pending {
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--colour-border);
-}
-
-.figures {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
-  gap: var(--space-4);
-  margin: var(--space-4) 0 0;
-}
-
-.figures__item {
-  min-width: 0;
-}
-
-.figures__label {
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--colour-text-muted);
-}
-
-.figures__value {
-  margin: var(--space-1) 0 0;
-  /* Overrides .numeric's right alignment: these are labelled figures, not a column. */
-  text-align: left;
-  font-size: 1.125rem;
-  font-weight: 700;
-}
-
-/* The figure the run is actually about. */
-.figures__item--emphasis .figures__value {
-  color: var(--colour-accent-dark);
-}
-
-.table-scroll {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  margin-top: var(--space-5);
-}
-
-.payslips {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.9375rem;
-}
-
-.payslips__caption {
-  padding-bottom: var(--space-2);
-  color: var(--colour-text-muted);
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  text-align: left;
-}
-
-.payslips th,
-.payslips td {
-  padding: var(--space-3);
-  text-align: left;
-  white-space: nowrap;
-  border-bottom: 1px solid var(--colour-border);
-}
-
-.payslips thead th {
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  color: var(--colour-text-muted);
-}
-
-.payslips tbody tr:last-child th,
-.payslips tbody tr:last-child td {
-  border-bottom: none;
-}
-
-.payslips__amount {
-  text-align: right;
-}
-
-.payslips__employee {
-  font-weight: 600;
-}
-
-.payslips__net {
-  font-weight: 700;
 }

@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { Router, provideRouter } from '@angular/router';
 import { Observable, of, throwError } from 'rxjs';
 import { ApiFailure } from '../../../core/http/api-error';
 import { PayrollRunDetail, RunPayslip, StartPayrollRunRequest } from '../payroll-run.models';
@@ -47,8 +48,10 @@ describe('StartRun', () => {
 
   let requests: StartPayrollRunRequest[];
   let startResult: () => Observable<PayrollRunDetail>;
+  let navigations: unknown[][];
 
   beforeEach(() => {
+    navigations = [];
     // Fixed so "the month just gone" is a fact rather than whatever today happens to be.
     // Only `Date` is faked: the timers the test harness itself uses must stay real.
     vi.useFakeTimers({ toFake: ['Date'], now: new Date(2026, 8, 20, 12) });
@@ -58,6 +61,7 @@ describe('StartRun', () => {
 
     TestBed.configureTestingModule({
       providers: [
+        provideRouter([]),
         {
           provide: PayrollRunService,
           useValue: {
@@ -69,6 +73,13 @@ describe('StartRun', () => {
         },
       ],
     });
+
+    // Recorded rather than performed: this screen's job ends at asking to navigate.
+    const router = TestBed.inject(Router);
+    router.navigate = (commands: unknown[]) => {
+      navigations.push(commands);
+      return Promise.resolve(true);
+    };
   });
 
   afterEach(() => {
@@ -222,43 +233,29 @@ describe('StartRun', () => {
   });
 
   describe('the draft it produces', () => {
-    it('shows the totals the server computed', async () => {
+    it('opens the review screen for the run that was created', async () => {
+      // The draft exists to be checked and published, and that is another screen's job —
+      // so this one hands it over rather than rendering it a second time.
       await createComponent();
 
       component.start();
       await settle();
 
-      expect(text()).toContain('₹180,000.00');
-      expect(text()).toContain('₹12,000.00');
-      expect(text()).toContain('₹168,000.00');
-      expect(text()).toContain('DRAFT');
+      expect(navigations).toEqual([['/payroll-runs', 7]]);
     });
 
-    it('lists a row per computed payslip', async () => {
+    it('confirms what was computed on the way out', async () => {
       await createComponent();
 
       component.start();
       await settle();
 
-      expect(
-        (fixture.nativeElement as HTMLElement).querySelectorAll('.payslips tbody tr'),
-      ).toHaveLength(2);
-      expect(text()).toContain('#1001');
+      expect(text()).toContain('Draft created for August 2026');
       expect(text()).toContain('2 payslips computed');
+      expect(text()).toContain('nothing published yet');
     });
 
-    it('says nothing has been published', async () => {
-      // The distinction the whole draft/finalise split exists for: these figures are not
-      // yet visible to the employees they are about.
-      await createComponent();
-
-      component.start();
-      await settle();
-
-      expect(text()).toContain('Nothing has been published');
-    });
-
-    it("names the run's own period, not whatever the dropdowns now say", async () => {
+    it('names the period the run was for, not whatever the dropdowns now say', async () => {
       await createComponent();
 
       component.start();
@@ -266,12 +263,9 @@ describe('StartRun', () => {
       component.form.patchValue({ periodMonth: 3 });
       await settle();
 
-      // A heading that followed the form would relabel a draft already computed. The form
-      // itself has moved on to March, which is why this asserts on the heading and not on
-      // the page's text.
-      const heading = (fixture.nativeElement as HTMLElement).querySelector('.result__period');
-      expect(heading?.textContent).toContain('August 2026');
-      expect(heading?.textContent).not.toContain('March');
+      // A confirmation that followed the form would relabel a draft already computed.
+      expect(text()).toContain('Draft created for August 2026');
+      expect(text()).not.toContain('Draft created for March 2026');
     });
 
     it('clears a previous draft when another run is started', async () => {
@@ -286,7 +280,17 @@ describe('StartRun', () => {
       await settle();
 
       expect(component.started()).toBeNull();
-      expect(text()).not.toContain('₹168,000.00');
+      expect(text()).not.toContain('Draft created');
+    });
+
+    it('does not navigate when the run was refused', async () => {
+      startResult = () => throwError(() => new ApiFailure(409, 'already exists'));
+      await createComponent();
+
+      component.start();
+      await settle();
+
+      expect(navigations).toEqual([]);
     });
   });
 

@@ -10,6 +10,13 @@ import { PayrollRunStatus, PayslipLine } from '../payslips/payslip.models';
  * thing to keep in step with the server.
  */
 
+/**
+ * Re-exported so the payroll screens have one place to import from. The type itself lives
+ * with the payslips, because a payslip's visibility follows its run's state — and one
+ * definition of it is the point.
+ */
+export type { PayrollRunStatus };
+
 /** Request body of `POST /payroll-runs` — `StartPayrollRunRequest`. */
 export interface StartPayrollRunRequest {
   periodYear: number;
@@ -59,6 +66,24 @@ export interface RunPayslip {
   netPayInWords: string;
   earnings: PayslipLine[];
   deductions: PayslipLine[];
+}
+
+/** Loss-of-pay days for one employee on a draft run (FR-5.6). */
+export interface LopAdjustment {
+  employeeId: number;
+  lopDays: number;
+}
+
+/**
+ * Request body of `POST /payroll-runs/{id}/recompute`.
+ *
+ * The list is the **complete picture**, not a patch: an employee absent from it is
+ * recomputed at full attendance. That is what makes "clear the loss of pay I entered by
+ * mistake" expressible — as a delta there would be no way to say it — so a screen must
+ * send every adjustment it still wants, every time.
+ */
+export interface RecomputePayrollRunRequest {
+  adjustments: LopAdjustment[];
 }
 
 /**

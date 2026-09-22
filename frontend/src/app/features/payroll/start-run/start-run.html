@@ -1,3 +1,9 @@
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a class="breadcrumb__link" routerLink="/payroll-runs">Payroll runs</a>
+  <span class="breadcrumb__separator" aria-hidden="true">/</span>
+  <span>New run</span>
+</nav>
+
 <header class="page-header">
   <div>
     <h1 class="page-header__title">Run payroll</h1>
@@ -111,81 +117,14 @@
 }
 
 @if (started(); as detail) {
-  <section class="card result" aria-labelledby="result-heading">
-    <header class="result__header">
-      <div>
-        <p class="result__label">Draft created</p>
-        <!--
-          The run's own period, not the dropdowns': they are still editable, and a heading
-          that followed them would relabel a draft that had already been computed.
-        -->
-        <h2 class="result__period" id="result-heading">{{ detail.run | period }}</h2>
-      </div>
-      <span class="badge badge--inactive">{{ detail.run.status }}</span>
-    </header>
-
-    <p class="result__note">
-      Nothing has been published. These figures are what finalising would publish,
-      unchanged — a run is never recomputed at finalisation, which is what makes reviewing
-      it mean something.
-    </p>
-
-    <dl class="figures">
-      <div class="figures__item">
-        <dt class="figures__label">Employees</dt>
-        <dd class="figures__value numeric">{{ detail.run.employeeCount }}</dd>
-      </div>
-      <div class="figures__item">
-        <dt class="figures__label">Gross</dt>
-        <dd class="figures__value numeric">{{ detail.run.totalGross | money }}</dd>
-      </div>
-      <div class="figures__item">
-        <dt class="figures__label">Deductions</dt>
-        <dd class="figures__value numeric">{{ detail.run.totalDeductions | money }}</dd>
-      </div>
-      <div class="figures__item figures__item--emphasis">
-        <dt class="figures__label">Net payable</dt>
-        <dd class="figures__value numeric">{{ detail.run.totalNet | money }}</dd>
-      </div>
-    </dl>
-
-    <div class="table-scroll" tabindex="0" role="region" aria-label="Computed payslips">
-      <table class="payslips">
-        <caption class="payslips__caption">
-          {{ detail.payslips.length }} payslip{{ detail.payslips.length === 1 ? '' : 's' }}
-          computed for run #{{ detail.run.id }}
-        </caption>
-        <thead>
-          <tr>
-            <th scope="col">Employee</th>
-            <th scope="col">Paid days</th>
-            <th scope="col" class="payslips__amount">Gross</th>
-            <th scope="col" class="payslips__amount">Deductions</th>
-            <th scope="col" class="payslips__amount">Net pay</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (payslip of detail.payslips; track payslip.id) {
-            <tr>
-              <!--
-                By id, because that is all a run's payslip carries: it names its employee
-                by reference and leaves resolving them to whoever needs the name.
-              -->
-              <th scope="row" class="payslips__employee code">#{{ payslip.employeeId }}</th>
-              <td class="numeric">{{ payslip.paidDays }} / {{ payslip.totalDays }}</td>
-              <td class="numeric">{{ payslip.grossPay | money }}</td>
-              <td class="numeric">{{ payslip.totalDeductions | money }}</td>
-              <td class="numeric payslips__net">{{ payslip.netPay | money }}</td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    </div>
-
-    <p class="result__pending">
-      Reviewing this draft line by line, applying loss-of-pay days and finalising it are
-      API-only for now — those screens do not exist yet, so the draft stays open until one
-      of them is used.
-    </p>
-  </section>
+  <!--
+    A brief confirmation only. The draft itself belongs on the review screen, which this
+    navigates to — rendering its totals and payslips here as well would be two screens
+    claiming to be the same thing.
+  -->
+  <p class="alert alert--info" role="status">
+    Draft created for {{ detail.run | period }}: {{ detail.payslips.length }} payslip{{
+      detail.payslips.length === 1 ? '' : 's'
+    }} computed, nothing published yet. Opening it for review…
+  </p>
 }

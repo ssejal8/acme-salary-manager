@@ -1,9 +1,9 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { Router, RouterLink } from '@angular/router';
 import { ApiFailure } from '../../../core/http/api-error';
 import { PeriodPipe, formatPeriod } from '../../../shared/dates';
-import { MoneyPipe } from '../../../shared/money.pipe';
 import {
   MONTH_OPTIONS,
   Period,
@@ -27,9 +27,10 @@ import { PayrollRunService } from '../payroll-run.service';
  * first is cancelled (FR-5.7), and it can take a minute over a thousand employees
  * (NFR-1.3). None of that is recoverable by guessing from a spinner.
  *
- * What it produces is a **draft**. Payslips are computed with the run rather than at
- * finalisation (FR-5.8), which is exactly why the response is worth rendering: the figures
- * shown here are the figures finalising would publish, unchanged.
+ * What it produces is a **draft**, and this screen hands it straight to the review screen
+ * rather than rendering it: payslips are computed with the run rather than at finalisation
+ * (FR-5.8), so what comes back is a month waiting to be checked, which is somebody's next
+ * action and not a result to admire here.
  *
  * ## The period rules are the server's; two of them are mirrored in the controls
  *
@@ -45,13 +46,14 @@ import { PayrollRunService } from '../payroll-run.service';
  */
 @Component({
   selector: 'app-start-run',
-  imports: [ReactiveFormsModule, MoneyPipe, PeriodPipe],
+  imports: [ReactiveFormsModule, RouterLink, PeriodPipe],
   templateUrl: './start-run.html',
   styleUrl: './start-run.scss',
 })
 export class StartRun {
   private readonly runs = inject(PayrollRunService);
   private readonly formBuilder = inject(FormBuilder);
+  private readonly router = inject(Router);
 
   readonly months = MONTH_OPTIONS;
   readonly years = yearOptions(new Date());
@@ -155,6 +157,10 @@ export class StartRun {
       next: (detail) => {
         this.started.set(detail);
         this.starting.set(false);
+        // Straight to the review screen, which is where the next step happens: a draft
+        // exists to be checked and then published, and stopping here would leave the
+        // cycle half-finished on the screen that began it.
+        void this.router.navigate(['/payroll-runs', detail.run.id]);
       },
       error: (failure: unknown) => {
         this.starting.set(false);

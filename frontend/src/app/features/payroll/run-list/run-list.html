@@ -1,0 +1,95 @@
+<header class="page-header">
+  <div>
+    <h1 class="page-header__title">Payroll runs</h1>
+    <p class="page-header__meta">
+      @if (loaded()) {
+        @if (page().totalElements > 0) {
+          Showing {{ range().from }}–{{ range().to }} of {{ page().totalElements }}
+        } @else {
+          No payroll has been run yet
+        }
+      }
+    </p>
+  </div>
+  <a class="button button--primary button--compact page-header__action" routerLink="/payroll-runs/new">
+    Run payroll
+  </a>
+</header>
+
+@if (errorMessage(); as message) {
+  <p class="alert alert--error" role="alert">{{ message }}</p>
+}
+
+@if (loaded() && page().totalElements === 0 && !errorMessage()) {
+  <div class="card">
+    <app-empty-state
+      title="No payroll has been run yet"
+      hint="A run computes a month's pay for everyone eligible as a draft, which you then review and finalise."
+    />
+  </div>
+}
+
+@if (page().content.length > 0) {
+  <section class="card runs-card" aria-label="Payroll runs">
+    <div class="table-scroll" tabindex="0" role="region" aria-label="Payroll runs table">
+      <table class="runs">
+        <thead>
+          <tr>
+            <th scope="col">Period</th>
+            <th scope="col">Status</th>
+            <th scope="col" class="runs__amount">Employees</th>
+            <th scope="col" class="runs__amount">Gross</th>
+            <th scope="col" class="runs__amount">Deductions</th>
+            <th scope="col" class="runs__amount">Net</th>
+            <th scope="col"><span class="visually-hidden">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (run of page().content; track run.id) {
+            <tr>
+              <th scope="row" class="runs__period">{{ run | period }}</th>
+              <td>
+                <span class="badge" [class]="statusClass(run.status)">
+                  {{ statusLabel(run.status) }}
+                </span>
+              </td>
+              <td class="numeric">{{ run.employeeCount }}</td>
+              <td class="numeric">{{ run.totalGross | money }}</td>
+              <td class="numeric">{{ run.totalDeductions | money }}</td>
+              <td class="numeric runs__net">{{ run.totalNet | money }}</td>
+              <td class="runs__actions">
+                <a class="runs__link" [routerLink]="['/payroll-runs', run.id]">
+                  <!-- A draft is opened to be acted on; a finalised one, to be read. -->
+                  {{ run.status === 'DRAFT' ? 'Review' : 'View' }}
+                  <span class="visually-hidden">{{ run | period }}</span>
+                </a>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    @if (page().hasPrevious || page().hasNext) {
+      <nav class="pager" aria-label="Pagination">
+        <button
+          type="button"
+          class="button button--secondary button--compact"
+          [disabled]="!page().hasPrevious"
+          (click)="load(page().page - 1)"
+        >
+          Previous
+        </button>
+        <span class="pager__position">Page {{ page().page + 1 }} of {{ page().totalPages }}</span>
+        <button
+          type="button"
+          class="button button--secondary button--compact"
+          [disabled]="!page().hasNext"
+          (click)="load(page().page + 1)"
+        >
+          Next
+        </button>
+      </nav>
+    }
+  </section>
+}
