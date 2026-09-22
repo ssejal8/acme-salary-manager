@@ -121,6 +121,8 @@ The useful half of this document.
 | What went wrong | What caught it |
 | --- | --- |
 | A `computed()` wrapped around a `FormControl.value` — which never recomputes, because a control's value is not a signal. The unit label on the component form was stuck on whatever the form opened with. | A unit test. Now recorded in the frontend README so it is not rediscovered. |
+| **The same bug again**, months later, in the employee exit panel: a computed over `control.touched` left the "this is required" message permanently `null`. Recording a lesson is not the same as not repeating it. | A unit test written before the panel was wired up. The fix derives the message from a bridged value instead of control state. |
+| A form that refused a pasted email — `" a@b.test "` fails `Validators.email` — while `submit()` was about to trim it and send it anyway. | Writing the test for trimming, which failed for a reason other than the one expected. |
 | The payroll-run result heading read from the form controls, so changing the dropdowns after a run relabelled a draft that had already been computed. | Reviewing the behaviour rather than the diff; now pinned by a test that changes the selection after a successful run. |
 | A server refusal stayed pinned under the period dropdown after the user picked a different month, attributing "2026-08 already has a run" to a month the server never saw. | Reading the interaction end to end; fixed and tested. |
 | The seed's verification block nested an aggregate inside an aggregate — invalid SQL that would have failed at startup. | The PostgreSQL parser, before the file was ever run. |
@@ -147,8 +149,9 @@ Stated here rather than left to be discovered:
   machine without Docker has not verified the schema, the column types, or the queries.
 - **Nothing is deployed**, and there is no CI pipeline, so no build has been proven on a
   machine other than a development one.
-- **The payroll cycle is only partly reachable from the UI** — a run can be started, but
-  reviewing, adjusting loss of pay, finalising and cancelling are API-only.
+- **The run review screen pages its payslip table in the browser.** The API returns every
+  payslip in the run, so at 10,000 employees the payload is large even though the DOM is
+  not. A paged payslip endpoint is the fix and is outstanding.
 - **The 10,000-employee seed makes NFR-1.3 a live question**, not a theoretical one: a run
   over this dataset is ~9,900 payslips in one transaction against a 60-second budget
   written for 1,000.

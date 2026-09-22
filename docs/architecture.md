@@ -322,10 +322,11 @@ Built so far: `core/` in full, `shared/`, `features/auth/login`, `features/emplo
 compensation dashboard) and `features/payslips` (my payslips and the payslip view; the
 HR-facing list and the PDF download are not built).
 
-`features/payroll` holds the start-run screen only. The run list, the draft review with
-its loss-of-pay adjustments and the finalise confirmation are still directories in this
-plan — their endpoints exist, so they are buildable rather than blocked, which is the
-difference between them and `features/auth/change-password`.
+`features/payroll` is complete as sketched: the run list, the start-run screen and the
+draft review with its loss-of-pay adjustments and finalise/cancel confirmations.
+`features/employees` now includes the create/edit form as well as the list and detail.
+`features/auth/change-password` remains a directory in this plan only — its endpoint does
+not exist.
 
 `features/components` and `features/reports` are not in the original sketch above, which
 listed component definitions under reference data and folded the dashboard into `reports`.

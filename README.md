@@ -18,13 +18,11 @@ record with its compensation and full revision history, the package assignment f
 live server-side preview, the compensation dashboard, the salary component definitions, and
 starting a payroll run.
 
-The **payroll run engine** is implemented on the backend — computation, proration, and the
-draft → finalise/cancel state machine. Starting a run now has a screen: HR picks a
-completed month and gets the draft back with its totals and every payslip in it. The rest
-of the cycle is still API-only — reviewing a draft line by line, applying loss-of-pay days,
-finalising and cancelling have no UI, so a month is still published with curl. Still
-missing entirely: payslip PDF export, the HR-facing payslip list, employee
-create/update/deactivate, change password, and the audit trail query.
+The **payroll cycle is now complete end to end**: HR starts a run for a completed month,
+reviews the draft payslip by payslip, enters loss-of-pay days and recomputes, then
+finalises to publish or cancels to abandon. **Employee records are writable** too — create,
+edit and record an exit, all from the UI. Still missing: payslip PDF export, the HR-facing
+payslip list, change password, and the audit trail query.
 
 An EMPLOYEE now has screens of their own — their payslip list and a payslip view — so all
 three roles land somewhere useful. Until this turn, an employee signed in successfully and
@@ -525,6 +523,46 @@ Three things worth knowing about the contract:
 - **The response is a `PageResponse`**, not Spring's `Page`: `content`, `page`, `size`,
   `totalElements`, `totalPages`, `hasNext`, `hasPrevious`.
 
+### Writing employees
+
+| Endpoint | Roles | Purpose |
+| --- | --- | --- |
+| `POST /api/v1/employees` | ADMIN, HR | Create a record (FR-2.1) |
+| `PUT /api/v1/employees/{id}` | ADMIN, HR | Replace the editable fields (FR-2.3) |
+| `POST /api/v1/employees/{id}/deactivate` | ADMIN, HR | Record an exit (FR-2.5) |
+
+```bash
+curl -s -X POST http://localhost:8080/api/v1/employees \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"employeeCode":"E-2001","firstName":"Ravi","lastName":"Iyer",
+       "workEmail":"ravi.iyer@acme.test","dateOfJoining":"2026-04-01",
+       "departmentId":1,"designationId":1,"gradeId":2}'
+```
+
+Five things the API decides here:
+
+- **There is no `DELETE`, and there will not be one.** A payslip from years ago must still
+  resolve the person it was for, so leaving is a `POST` to `/deactivate` carrying the exit
+  date (ADR-014).
+- **A duplicate is a 409 with the field named** (FR-2.2), and both duplicates are reported
+  together when the code *and* the email are taken. The pre-check normalises the way the
+  entity does — code uppercased, email lowercased — because a check against the raw input
+  would let `e-2001` past a lookup for `E-2001`; the unique indexes remain what actually
+  prevents a duplicate under a race.
+- **The employee code and date of joining are immutable** (FR-2.3). They are not fields on
+  the update request at all, and the entity maps them `updatable = false` so the mapping
+  enforces it too.
+- **The exit date is required, never defaulted**, and may be in the future. Payroll
+  eligibility for a period is derived from it (FR-2.6), so a defaulted date would quietly
+  decide whether someone is paid for the month they left. A second deactivation answers
+  409 rather than moving the first date.
+- **A bad reference is a 400 naming which one.** An unknown `gradeId` is not a missing
+  employee, so it is a field error on `gradeId` rather than a 404.
+
+Every one of the three writes records an audit event with the actor inside the same
+transaction (ADR-013), using the `EMPLOYEE_CREATED` / `EMPLOYEE_UPDATED` /
+`EMPLOYEE_DEACTIVATED` actions.
+
 ### Assigning compensation
 
 A package is never edited. Assigning a new one supersedes the current revision, so the
@@ -623,9 +661,13 @@ detection, and every feature area lazy-loaded by route. Module-specific notes ar
 | --- | --- | --- |
 | `/login` | public | Sign in. Mirrors the server's validation, and shows the server's message on failure |
 | `/employees` | ADMIN, HR | Employee list: name search, department/designation/grade filters, leaver visibility, sortable columns, paging, rows-per-page |
-| `/employees/:id` | ADMIN, HR | One employee's record, plus the package in force and every revision behind it |
+| `/employees/new` | ADMIN, HR | Create a record. Duplicate code or email comes back as a 409 against the field |
+| `/employees/:id` | ADMIN, HR | One employee's record, plus the package in force and every revision behind it; records an exit |
+| `/employees/:id/edit` | ADMIN, HR | Edit the editable fields; the code and joining date are shown as immutable facts |
 | `/employees/:id/salary-structures/new` | ADMIN, HR | Assign a package, with gross/net/CTC costed by the server as the figures are edited |
-| `/payroll-runs/new` | ADMIN, HR | Start a payroll run for a completed month, and see the draft it computed |
+| `/payroll-runs` | ADMIN, HR | Every run, newest period first, with totals and status |
+| `/payroll-runs/new` | ADMIN, HR | Start a run for a completed month; hands the draft to the review screen |
+| `/payroll-runs/:id` | ADMIN, HR | Review a draft: per-employee loss-of-pay days, recompute, finalise or cancel |
 | `/reports/compensation` | ADMIN, HR | What the packages in force cost, by department and by grade |
 | `/salary-components` | ADMIN, HR | Component definitions; only ADMIN may define one |
 | `/payslips` | any authenticated | My own payslips, newest first — the EMPLOYEE's home |
@@ -754,9 +796,42 @@ The form is pre-filled from the package in force, which makes a raise a small ed
 than a re-entry of six figures. The effective date is deliberately left blank — it is the
 one field that has to be a decision.
 
-### Starting a payroll run
+### Employee records
 
-`/payroll-runs/new` is two dropdowns and a button, so the screen's real work is explaining
+`/employees/new` and `/employees/:id/edit` are the same component: the two screens differ
+by two fields and a verb, so splitting them would mean maintaining the same six controls,
+the same reference-data load and the same error handling twice.
+
+Four details are deliberate:
+
+- **The code and joining date are immutable after creation** (FR-2.3), and in edit mode
+  they appear as read-only facts with the reason beside them rather than as greyed-out
+  inputs. A disabled box invites "why can't I?"; a value with a sentence under it answers
+  the question — the code is on published payslips, and the joining date is what every
+  salary revision is validated against.
+- **Uniqueness belongs to the server.** A duplicate code or email cannot be checked in the
+  browser at all, so it arrives as a 409 carrying a field-level message (FR-2.2) and is
+  shown against the control it names. Both duplicates are reported together when both are
+  taken, because a form you have to resubmit to learn the second fact is a worse form.
+- **A padded value is trimmed when the field loses focus.** A pasted address arrives as
+  `" asha@acme.test "`, which the email validator rejects — so without trimming the form
+  would refuse a value it was about to trim and send anyway.
+- **Recording an exit stays on the record screen**, not in the form: it is one date and a
+  decision, and the thing being confirmed is the record in front of you. The panel says
+  what the date will do — the employee stays in payroll for a period beginning on or
+  before it, and drops out afterwards (FR-2.6) — and a second exit is refused rather than
+  quietly moving the first, because that would be a payroll change disguised as a repeated
+  click.
+
+Nothing is ever deleted. There is no `DELETE` endpoint and no button asking for one: a
+payslip from years ago must still resolve the person it was for (ADR-014).
+
+### Running payroll
+
+`/payroll-runs` lists every run newest first, `/payroll-runs/new` starts one, and
+`/payroll-runs/:id` is where the month is actually finished.
+
+The start screen is two dropdowns and a button, so its real work is explaining
 what the button does. That is not decoration: a run computes a month's pay for the whole
 organisation in one transaction, it takes the period for itself so a second attempt is a
 409 until the first is cancelled, and it can take a minute over a thousand employees. None
@@ -764,12 +839,7 @@ of that is guessable from a spinner, so the screen says each of it — including
 somebody eligible without a package is skipped, that a leaver is included for the month
 they left, and that loss of pay is applied by recomputing afterwards rather than here.
 
-What comes back is rendered rather than summarised away: the draft's totals and a row per
-computed payslip. Those are the figures finalising would publish *unchanged* (FR-5.8),
-which is the only reason reviewing a draft means anything — so showing them is the point of
-the response, not a courtesy.
-
-Three details are deliberate:
+Two details there are deliberate:
 
 - **The month defaults to the month just gone**, which is what payroll is nearly always
   being run for, and the period arithmetic behind that lives in `payroll-period.ts` and is
@@ -779,12 +849,30 @@ Three details are deliberate:
   explains itself before a request rather than after a 400. It is a mirror and not a
   replacement: the browser's clock is not authoritative, and where the server disagrees its
   message is what gets shown.
-- **The draft's heading names the run's own period, not the dropdowns'.** They stay
-  editable after a run, and a heading that followed them would relabel a draft that had
-  already been computed.
 
-Reviewing a draft line by line, adjusting loss-of-pay days, finalising and cancelling have
-no screens yet, and the result panel says so rather than leaving it to be discovered.
+A started run hands straight over to the **review screen**, because a draft is somebody's
+next action rather than a result to admire. That screen shows the run's totals and one row
+per payslip — the figures finalising would publish *unchanged* (FR-5.8), which is the only
+thing that makes reviewing them mean anything — and carries the rest of the cycle:
+
+- **Loss of pay is entered per employee, then recomputed.** Earnings prorate over the
+  month while fixed statutory deductions do not (FR-5.4), and the screen says so where the
+  days are entered. Recompute is offered only once something has actually changed.
+- **The adjustments are sent as the whole picture, never a delta** (FR-5.6). An employee
+  absent from the request is recomputed at full attendance, which is precisely how a
+  mistaken entry is cleared — as a patch there would be no way to express it. So a zero in
+  the box is *omitted* from the request rather than sent as zero.
+- **Anything irreversible takes two clicks**, and the confirmation says what will happen in
+  the words of the thing that will happen: "*{n} payslips totalling {amount} become visible
+  to the employees they belong to*", not "are you sure?". Finalising publishes; cancelling
+  abandons the draft and frees the period.
+- **A finalised or cancelled run is read-only**, with the reason on screen: published
+  payslips are immutable, and a correction means a later period rather than an edit
+  (FR-6.6).
+- **The payslip table is paged in the browser, and says so.** The API returns the whole run
+  in one response, so at ten thousand employees the rows are split client-side to keep them
+  out of the DOM — a stopgap the screen names rather than hides, because the real fix is a
+  paged payslip endpoint.
 
 ### The compensation dashboard
 
@@ -959,8 +1047,8 @@ Four documents, in the order worth reading them:
       undoes the last filter; rows-per-page selector
 - [x] Angular compensation: the package in force with its line-by-line breakdown, and the
       full revision history, on the employee record
-- [ ] Employee write endpoints: create, update, deactivate — and the Angular form that
-      needs them. The detail screen is read-only until these exist
+- [x] Employee write endpoints: create, update, deactivate, with the Angular form and the
+      exit panel that drive them
 - [x] Angular structures: the assignment form with live server-side preview, the
       grade-band override prompt, and the `POST` that supersedes the current revision
 - [x] Angular compensation dashboard over `/reports/compensation`
@@ -975,10 +1063,11 @@ Four documents, in the order worth reading them:
 - [x] Payslip reads: `/payslips/me` and `/payslips/{id}` with record-level ownership
 - [x] Angular payslips: my payslips and a payslip view, plus a role-aware landing so an
       EMPLOYEE has somewhere to go
-- [x] Angular payroll: the start-run screen over `POST /payroll-runs`, with the draft it
-      computes rendered in full
-- [ ] Angular payroll review: the run list, a draft review screen with loss-of-pay
-      adjustments, and finalise/cancel — the rest of FR-5.5 to FR-5.10
+- [x] Angular payroll, the whole cycle: the run list, the start-run screen, and a draft
+      review screen with loss-of-pay adjustments, recompute, finalise and cancel
+      (FR-5.1 to FR-5.10)
+- [ ] Paged payslip endpoint for a run, so the review table stops being split in the
+      browser — and NFR-1.3 re-budgeted against a measured 10,000-employee run
 - [ ] Payslip PDF export (FR-6.4) and the HR-facing filtered list (FR-6.5)
 - [ ] Reference-data write endpoints (ADMIN) and the audit-trail query endpoint
 - [ ] CI pipeline: build, test, lint on every push

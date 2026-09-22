@@ -21,15 +21,17 @@ Every screen whose API exists: login, the shell with role-aware navigation, the 
 role guards, the three HTTP interceptors, the employee list (server-side paging, filtering
 and sorting, state in the URL), the employee record with its compensation and revision
 history, the package assignment form with a live server-side preview, the compensation
-dashboard, the salary component definitions, and starting a payroll run.
+dashboard, and the salary component definitions.
+
+Employee records are writable: create, edit, and record an exit. The **payroll cycle is
+complete** — list runs, start one, review the draft with per-employee loss-of-pay days,
+recompute, then finalise or cancel.
 
 Plus the EMPLOYEE screens: their own payslip list and a payslip view, with a role-aware
 landing so all three roles arrive somewhere useful.
 
-Not built: the rest of the payroll cycle — the run list, the draft review with loss-of-pay
-adjustments, finalise and cancel all exist on the API and have no screen, so a month is
-still published with curl. Also missing: payslip PDF export, the HR-facing payslip list,
-employee create/update/deactivate, change password, and the audit trail.
+Not built: payslip PDF export, the HR-facing payslip list, change password, and the audit
+trail.
 
 ## Things that will look wrong until you know why
 
@@ -76,7 +78,14 @@ employee create/update/deactivate, change password, and the audit trail.
   form re-implements the band check.
 - **A `computed()` over a `FormControl.value` never recomputes** — a control's value is not
   a signal. Bridge it with `toSignal(control.valueChanges)`. This was a real bug in the
-  component form's unit label, caught by a test.
+  component form's unit label, and it recurred in the employee exit panel, where a
+  computed over `control.touched` left the "this is required" message stuck on `null`.
+  Both were caught by tests; the second is why the exit panel derives its message from a
+  bridged value and a submitted flag rather than from control state at all.
+- **Loss-of-pay adjustments are sent as the whole picture, never a delta.** The recompute
+  endpoint treats an absent employee as full attendance (FR-5.6), so the review screen
+  sends every adjustment it still wants each time — and *omits* a zero rather than sending
+  it, because omitting is what clears one.
 - **A `<select>` bound to a number needs `[ngValue]`, not `[value]`.** The month and year
   dropdowns on the run screen feed `periodMonth`/`periodYear`, which the API types as
   `Integer`. With `[value]` the control would hold the string `"8"` and send it. A test
