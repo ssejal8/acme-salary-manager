@@ -90,6 +90,21 @@ session.
 
 1. One organisation, one currency (INR), one legal jurisdiction. Multi-tenancy and
    multi-currency are not required.
+
+   This is the most significant exclusion in this document, and it is deliberate rather
+   than an oversight: the organisation described spans several countries, so the choice
+   needs stating. Multi-country payroll is not a bigger table — it is per-country
+   statutory deduction rules, tax tables and pay calendars, a currency on every amount,
+   FX for any consolidated figure, and a compliance surface per jurisdiction. Each of
+   those is a separate product decision, and implementing one badly is worse than
+   scoping it out.
+
+   What would change if it were in scope, so the cost is visible rather than vague:
+   `country` and `currency` on the employee; a currency on every monetary column and on
+   every amount crossing the API; a salary component set per jurisdiction rather than one
+   global set; aggregate reporting per currency, never summed across them; and a rate
+   source with an as-at date for anything consolidated. The data model here would take
+   the first two without redesign; the calculation and reporting layers would not.
 2. Payroll is monthly, on a calendar-month period. No weekly or bi-weekly cycles.
 3. Attendance and leave data are **entered by HR** as paid days / LOP days per employee
    per month; there is no attendance system to integrate with.
@@ -202,7 +217,7 @@ session.
 | --- | --- |
 | NFR-1.1 | 95th-percentile server response time for read endpoints shall be under 500 ms at 50 concurrent users. |
 | NFR-1.2 | Paginated list endpoints shall return at most 100 records per page and shall page in the database, never in memory. |
-| NFR-1.3 | A payroll run for 1,000 employees shall complete within 60 seconds. |
+| NFR-1.3 | A payroll run for 10,000 employees shall complete within 5 minutes, and the elapsed time and payslip count shall be logged for every run so the budget is measured rather than assumed. A run is one transaction (FR-5.9), so this is a ceiling on a single request; exceeding it is the trigger to revisit ADR-011. |
 | NFR-1.4 | The SPA shall reach first contentful paint within 2 seconds on a 10 Mbps connection. |
 
 ### 4.2 Security

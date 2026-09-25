@@ -324,9 +324,12 @@ HR-facing list and the PDF download are not built).
 
 `features/payroll` is complete as sketched: the run list, the start-run screen and the
 draft review with its loss-of-pay adjustments and finalise/cancel confirmations.
-`features/employees` now includes the create/edit form as well as the list and detail.
-`features/auth/change-password` remains a directory in this plan only — its endpoint does
-not exist.
+`features/employees` includes the create/edit form as well as the list and detail, and
+`features/payslips` now holds the HR-wide register alongside the personal list and the
+payslip view. `features/auth/change-password` exists. Two areas are not in the original
+sketch: `features/audit` (the ADMIN trail, FR-8.2) and
+`features/reference-data` (the ADMIN lists, FR-3.1 to FR-3.3) — each is a screen with its
+own route and service, so each is its own area.
 
 `features/components` and `features/reports` are not in the original sketch above, which
 listed component definitions under reference data and folded the dashboard into `reports`.

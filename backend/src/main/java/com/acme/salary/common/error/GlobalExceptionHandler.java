@@ -7,6 +7,7 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -16,6 +17,7 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 
@@ -86,6 +88,30 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(NotFoundException.class)
     public ResponseEntity<ApiError> onNotFound(NotFoundException ex, HttpServletRequest request) {
         return respond(HttpStatus.NOT_FOUND, ex.getMessage(), request, List.of());
+    }
+
+    /**
+     * The path exists but not for this verb — a {@code DELETE} of something this API
+     * deliberately does not let you delete, for instance.
+     *
+     * <p>Without this it falls to the catch-all and answers 500, which says "we broke"
+     * where the truth is "that is not an operation". Spring's own {@code Allow} header is
+     * preserved so a client can discover what the path does support.
+     */
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ApiError> onMethodNotSupported(
+            HttpRequestMethodNotSupportedException ex, HttpServletRequest request) {
+        ResponseEntity<ApiError> response = respond(
+                HttpStatus.METHOD_NOT_ALLOWED,
+                ex.getMethod() + " is not supported for this path",
+                request,
+                List.of());
+        if (ex.getSupportedHttpMethods() == null || ex.getSupportedHttpMethods().isEmpty()) {
+            return response;
+        }
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
+                .allow(ex.getSupportedHttpMethods().toArray(HttpMethod[]::new))
+                .body(response.getBody());
     }
 
     @ExceptionHandler(NoHandlerFoundException.class)

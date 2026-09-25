@@ -2,7 +2,14 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, forkJoin } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { Department, Designation, Grade, ReferenceData } from './reference-data.models';
+import {
+  Department,
+  Designation,
+  Grade,
+  ReferenceData,
+  SaveDesignationRequest,
+  SaveGradeRequest,
+} from './reference-data.models';
 
 /**
  * Departments, designations and grades — the vocabulary the employee screens filter and
@@ -29,6 +36,43 @@ export class ReferenceDataService {
 
   grades(): Observable<Grade[]> {
     return this.http.get<Grade[]>(`${environment.apiBaseUrl}/grades`);
+  }
+
+  /**
+   * Adds a department (FR-3.1). ADMIN only, enforced by the API.
+   *
+   * The code is sent only on creation: it is immutable afterwards, because reports and
+   * saved filters refer to it.
+   */
+  createDepartment(request: { code: string; name: string }): Observable<Department> {
+    return this.http.post<Department>(`${environment.apiBaseUrl}/departments`, request);
+  }
+
+  /** Renames a department. The name is the only editable field. */
+  renameDepartment(id: number, name: string): Observable<Department> {
+    return this.http.put<Department>(`${environment.apiBaseUrl}/departments/${id}`, { name });
+  }
+
+  createDesignation(request: SaveDesignationRequest): Observable<Designation> {
+    return this.http.post<Designation>(`${environment.apiBaseUrl}/designations`, request);
+  }
+
+  retitleDesignation(id: number, request: SaveDesignationRequest): Observable<Designation> {
+    return this.http.put<Designation>(`${environment.apiBaseUrl}/designations/${id}`, request);
+  }
+
+  createGrade(request: SaveGradeRequest): Observable<Grade> {
+    return this.http.post<Grade>(`${environment.apiBaseUrl}/grades`, request);
+  }
+
+  /**
+   * Amends a grade's name or CTC band (FR-3.3).
+   *
+   * A band change applies to the next assignment and does not re-validate the packages
+   * already assigned against it — a salary structure records what was agreed (ADR-009).
+   */
+  updateGrade(id: number, request: SaveGradeRequest): Observable<Grade> {
+    return this.http.put<Grade>(`${environment.apiBaseUrl}/grades/${id}`, request);
   }
 
   /** All three at once. Fails as a whole if any one of them fails. */

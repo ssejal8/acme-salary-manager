@@ -1,22 +1,37 @@
 package com.acme.salary.orgdata;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-
+import com.acme.salary.common.error.ConflictException;
 import com.acme.salary.orgdata.dto.DepartmentResponse;
 import com.acme.salary.orgdata.dto.DesignationResponse;
 import com.acme.salary.orgdata.dto.GradeResponse;
+import com.acme.salary.orgdata.dto.SaveGradeRequest;
 import com.acme.salary.support.ApiSecurityTestConfig;
 import java.math.BigDecimal;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithAnonymousUser;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -36,6 +51,9 @@ class ReferenceDataControllerTest {
 
     @MockitoBean
     private ReferenceDataService referenceData;
+
+    @Captor
+    private ArgumentCaptor<SaveGradeRequest> gradeCaptor;
 
     @Test
     @WithMockUser(roles = "HR")
@@ -137,6 +155,110 @@ class ReferenceDataControllerTest {
             mockMvc.perform(get(path))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.length()").value(0));
+        }
+    }
+
+    /** The write side (FR-3.1 to FR-3.3): ADMIN only, and no deletions at all. */
+    @Nested
+    @DisplayName("writes")
+    class Writes {
+
+        @Test
+        @WithMockUser(roles = "ADMIN")
+        void addingADepartmentAnswers201WithItsLocation() throws Exception {
+            when(referenceData.createDepartment(any()))
+                    .thenReturn(new DepartmentResponse(5L, "OPS", "Operations"));
+
+            mockMvc.perform(post("/api/v1/departments")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"code\": \"OPS\", \"name\": \"Operations\"}"))
+                    .andExpect(status().isCreated())
+                    .andExpect(header().string("Location", "/api/v1/departments/5"))
+                    .andExpect(jsonPath("$.code").value("OPS"));
+        }
+
+        @Test
+        @WithMockUser(roles = "ADMIN")
+        void renamingADepartmentTakesTheNameOnly() throws Exception {
+            // The code is immutable after creation, so the request cannot carry one.
+            when(referenceData.renameDepartment(eq(1L), any()))
+                    .thenReturn(new DepartmentResponse(1L, "ENG", "Engineering & QA"));
+
+            mockMvc.perform(put("/api/v1/departments/1")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"name\": \"Engineering & QA\"}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.name").value("Engineering & QA"))
+                    .andExpect(jsonPath("$.code").value("ENG"));
+        }
+
+        @Test
+        @WithMockUser(roles = "ADMIN")
+        void addingAGradeAcceptsAnAbsentBound() throws Exception {
+            // An absent bound means unbounded, not zero (FR-4.3).
+            when(referenceData.createGrade(gradeCaptor.capture()))
+                    .thenReturn(new GradeResponse(9L, "G6", new BigDecimal("6000000.00"), null));
+
+            mockMvc.perform(post("/api/v1/grades")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"name\": \"G6\", \"minCtc\": \"6000000.00\"}"))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.maxCtc").doesNotExist());
+
+            assertThat(gradeCaptor.getValue().maxCtc()).isNull();
+        }
+
+        @Test
+        @WithMockUser(roles = "ADMIN")
+        void aDuplicateIsA409AgainstTheField() throws Exception {
+            when(referenceData.createDepartment(any())).thenThrow(
+                    ConflictException.field("code", "a department with code ENG already exists"));
+
+            mockMvc.perform(post("/api/v1/departments")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"code\": \"ENG\", \"name\": \"Engineering\"}"))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.fieldErrors[0].field").value("code"));
+        }
+
+        @Test
+        @WithMockUser(roles = "ADMIN")
+        void rejectsAnIncompleteBody() throws Exception {
+            mockMvc.perform(post("/api/v1/designations")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.fieldErrors[0].field").value("title"));
+
+            verify(referenceData, never()).createDesignation(any());
+        }
+
+        @Test
+        @WithMockUser(roles = "HR")
+        void areRefusedToHrEvenThoughTheReadsAreNot() throws Exception {
+            // HR needs these lists to fill in a form; changing them alters the vocabulary
+            // every record and report is expressed in.
+            mockMvc.perform(post("/api/v1/departments")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"code\": \"OPS\", \"name\": \"Operations\"}"))
+                    .andExpect(status().isForbidden());
+
+            mockMvc.perform(put("/api/v1/grades/1")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"name\": \"G2\"}"))
+                    .andExpect(status().isForbidden());
+
+            verify(referenceData, never()).createDepartment(any());
+            verify(referenceData, never()).updateGrade(any(), any());
+        }
+
+        @Test
+        @WithMockUser(roles = "ADMIN")
+        void thereIsNoWayToDeleteAnyOfIt() throws Exception {
+            // Employees reference these rows with ON DELETE RESTRICT, so the absence of
+            // the endpoint is the design rather than an omission.
+            mockMvc.perform(delete("/api/v1/departments/1"))
+                    .andExpect(status().isMethodNotAllowed());
         }
     }
 }

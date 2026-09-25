@@ -70,6 +70,12 @@ export class Shell {
       available: this.auth.canManageEmployees(),
     },
     {
+      // ADMIN only: the lists every other screen's dropdowns are built from.
+      path: '/reference-data',
+      label: 'Reference data',
+      available: this.auth.hasAnyRole('ADMIN'),
+    },
+    {
       // ADMIN only, matching the endpoint — the one area HR cannot reach at all.
       path: '/audit',
       label: 'Audit trail',

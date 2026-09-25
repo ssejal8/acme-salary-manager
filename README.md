@@ -358,6 +358,7 @@ role travels with the tokens so the SPA can render its menu without a second rou
 | --- | --- | --- |
 | `POST /api/v1/auth/login` | public | Exchange credentials for tokens |
 | `POST /api/v1/auth/refresh` | public | Exchange a refresh token for a new access token |
+| `POST /api/v1/auth/change-password` | any authenticated | Change your own password (FR-1.6) |
 
 Four things about it are deliberate:
 
@@ -377,6 +378,13 @@ Four things about it are deliberate:
   those are the mitigations ADR-004 relies on.
 - **There is no logout endpoint.** Tokens are stateless and cannot be revoked, so a server
   logout would report a success it could not deliver. The client discards them instead.
+- **Changing a password is the one thing that really does end every session.** It moves the
+  user's `tokenVersion`, which the filter compares on every request, so a stolen token dies
+  with the password behind it — on every device, including the one that made the request.
+  The endpoint takes no user id, so it cannot be aimed at another account, and a wrong
+  current password is a **400 naming the field rather than a 401**: the caller is
+  authenticated, so this is a failed confirmation, and a 401 would make the client's
+  interceptor end the session over a typo.
 
 ### Payroll runs
 
@@ -442,7 +450,10 @@ grows with headcount — NFR-1.3 budgets 60 seconds for 1,000 employees.
 | Endpoint | Roles | Purpose |
 | --- | --- | --- |
 | `GET /api/v1/payslips/me` | any authenticated | The caller's own published payslips, newest first |
+| `GET /api/v1/payslips` | any authenticated | Paged search: run, period, department, employee (FR-6.5) — the register when given a period (FR-7.1) |
 | `GET /api/v1/payslips/{id}` | ADMIN, HR, owner | One payslip |
+| `GET /api/v1/payslips/{id}/pdf` | ADMIN, HR, owner | The same payslip as a one-page PDF (FR-6.4) |
+| `GET /api/v1/payroll-runs/{id}/payslips` | ADMIN, HR | The payslips in one run, paged — the register for its period |
 
 ```bash
 curl -s http://localhost:8080/api/v1/payslips/me -H "Authorization: Bearer $TOKEN"
@@ -476,6 +487,24 @@ Three details worth knowing:
   withhold. A caller with no employee record — an ADMIN login provisioned without one —
   gets an empty list rather than an error.
 
+**The search narrows itself by role, in the query.** ADMIN and HR see every payslip, drafts
+included. Any other caller is restricted to their own published rows *in the database*
+rather than filtered afterwards — so `GET /payslips?employeeId=<somebody else>` returns
+their own payslips rather than a refusal, and the page totals cannot disclose how many rows
+they were not allowed. `periodYear` and `periodMonth` are only honoured together, because
+"March" of no particular year would match every March on record.
+
+**The PDF is the same read, rendered differently.** It reuses the service's ownership
+check rather than restating it, so a payslip the caller may not have answers 404 there too,
+and a draft is stamped `DRAFT` on the document itself — HR downloads drafts while reviewing
+a run, and a page that did not say so could be handed to an employee as final. Two
+compromises are visible in the output: amounts read `INR 1,40,800.00` rather than using the
+rupee sign, because the standard PDF fonts are WinAnsi and embedding a Unicode font for one
+glyph is disproportionate; and a character WinAnsi cannot encode is replaced rather than
+refused, because a download that fails is worse than a transliteration gap. The digits are
+grouped the Indian way (NFR-4.4), which the renderer has to do itself — a server-rendered
+document cannot borrow the browser's formatter.
+
 A payslip carries the employee's identity and the period so it stands alone (FR-6.2), and
 its figures come from the payslip's own columns, never from the employee's current package.
 A payslip is the record of what was paid; reading from the package in force would make a
@@ -486,6 +515,18 @@ two-year-old payslip change when somebody gets a raise.
 `GET /departments`, `/designations` and `/grades` (ADMIN, HR) return the vocabulary an
 employee record is expressed in. Unpaged: these are three closed, small lists whose only
 consumer needs all of each or none of it, and they do not grow with headcount.
+
+Writing them is **ADMIN only** — `POST`/`PUT` on each of the three (FR-3.1 to FR-3.3).
+Reading stays open to HR because a form cannot be filled in without the options it offers;
+adding a department changes the vocabulary every record and report is expressed in, which
+is a different kind of decision.
+
+There is no `DELETE` on any of them, and that is the design rather than an omission:
+employees reference these rows with `ON DELETE RESTRICT`, so a row in use cannot be removed
+at all, and removing an unused one would orphan the history that names it. A department
+that is no longer used simply stops being chosen. Asking for one anyway now answers **405
+with an `Allow` header** rather than the 500 it used to — a test asserting the absence of
+the endpoint is what found that.
 
 ```bash
 curl -s http://localhost:8080/api/v1/grades -H "Authorization: Bearer $TOKEN"
@@ -633,6 +674,35 @@ Two things to read carefully:
   `employeesWithoutPackage` rather than being averaged in as zero — a payroll run would
   skip them, so the gap is the useful signal.
 
+### Audit trail
+
+`GET /api/v1/audit-events` (**ADMIN only**) filters by actor, entity type, entity, action
+and date range, paged and sorted in the database (FR-8.2).
+
+```bash
+curl -s 'http://localhost:8080/api/v1/audit-events?entityType=PayrollRun&from=2026-09-01&to=2026-09-30' \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+This is the strictest read in the API, and more restricted than the salary data itself: one
+page of it spans every feature, so HR's access to employee records deliberately does not
+extend to the record of everybody's actions — including their own.
+
+Four things worth knowing:
+
+- **`from` and `to` are calendar days and both are inclusive**, so asking for the same date
+  twice returns that whole day. Internally the range is half-open, which is what stops a
+  row being counted twice by two adjacent queries. The boundaries are UTC, which is what
+  the timestamps are stored and returned in.
+- **The trail is append-only and there is no write endpoint.** Rows are written inside the
+  transaction of the change they describe (ADR-013); a trail with an edit endpoint is not
+  evidence of anything.
+- **`details` is JSON, not a string of JSON.** A client that had to parse a string to read
+  `totalNet` would be holding the database's storage format rather than an API.
+- **The actor's address is resolved per page, not joined.** The trail records an actor id
+  precisely so it does not depend on the account still existing, so a renamed or deleted
+  login cannot change what the trail says happened — the row then reports the id alone.
+
 Errors share one envelope:
 
 ```json
@@ -671,7 +741,11 @@ detection, and every feature area lazy-loaded by route. Module-specific notes ar
 | `/reports/compensation` | ADMIN, HR | What the packages in force cost, by department and by grade |
 | `/salary-components` | ADMIN, HR | Component definitions; only ADMIN may define one |
 | `/payslips` | any authenticated | My own payslips, newest first — the EMPLOYEE's home |
+| `/payslips/all` | ADMIN, HR | Every payslip, filtered by period, department or employee; with a period chosen, the payroll register |
 | `/payslips/:id` | any authenticated | One payslip as a document; the API enforces ownership |
+| `/change-password` | any authenticated | Change your own password; signs you out, because the token it used is then dead |
+| `/reference-data` | ADMIN | Departments, designations and grades with their CTC bands |
+| `/audit` | ADMIN | Who changed what, and when — the one area HR cannot reach |
 | `/not-authorised` | any | Shown when a signed-in user's role does not cover a route |
 
 Everything above is server-driven. Nothing is filtered, sorted or paged in the browser, so
@@ -943,10 +1017,17 @@ token is refused by the API whatever the browser believed.
 ## Testing
 
 ```bash
-cd backend  && ./mvnw test                   # unit + integration (Testcontainers)
-cd frontend && npm test                      # unit tests (Vitest + Angular TestBed)
+cd backend  && ./mvnw test                   # 663 tests: unit + integration (Testcontainers)
+cd frontend && npm test                      # 537 tests (Vitest + Angular TestBed)
 cd frontend && npm run lint                  # ESLint, TypeScript and templates
 ```
+
+**CI runs all of that, plus two things a laptop usually cannot.** Docker is present on a
+GitHub runner, so the 53 `*IT` tests execute instead of skipping — that is the only place
+the Flyway schema, the column types and the hand-written queries are actually exercised.
+A third job applies the 10,000-employee seed to a real PostgreSQL, asserts every count this
+README documents, then applies it again to prove the seeds are idempotent as their headers
+claim. See [.github/workflows/ci.yml](.github/workflows/ci.yml).
 
 `./mvnw test` runs both unit tests and the `*IT` integration tests. The integration tests
 start a real PostgreSQL container (ADR-012) and **skip themselves when Docker is not
@@ -1053,7 +1134,6 @@ Four documents, in the order worth reading them:
       grade-band override prompt, and the `POST` that supersedes the current revision
 - [x] Angular compensation dashboard over `/reports/compensation`
 - [x] Angular salary components: definitions list, with create gated to ADMIN
-- [ ] Change own password (FR-1.6) — `tokenVersion` already invalidates tokens on change
 - [ ] Employee self-service for the *profile* and salary structure (`/employees/{id}`
       and structures for self); payslips are done
 - [x] 10,000-employee seed: generated deterministically from the row number, in-band by
@@ -1066,8 +1146,17 @@ Four documents, in the order worth reading them:
 - [x] Angular payroll, the whole cycle: the run list, the start-run screen, and a draft
       review screen with loss-of-pay adjustments, recompute, finalise and cancel
       (FR-5.1 to FR-5.10)
-- [ ] Paged payslip endpoint for a run, so the review table stops being split in the
-      browser — and NFR-1.3 re-budgeted against a measured 10,000-employee run
-- [ ] Payslip PDF export (FR-6.4) and the HR-facing filtered list (FR-6.5)
-- [ ] Reference-data write endpoints (ADMIN) and the audit-trail query endpoint
-- [ ] CI pipeline: build, test, lint on every push
+- [x] Paged payslip search (FR-6.5) doubling as the payroll register (FR-7.1), and a paged
+      per-run endpoint so the review table is no longer split in the browser
+- [x] Payslip PDF export (FR-6.4), reusing the ownership check and stamping a draft
+- [x] Change own password (FR-1.6), and an EMPLOYEE login provisioned with each employee
+      record (FR-2.7)
+- [x] Audit-trail query for ADMIN (FR-8.2), and reference-data writes (FR-3.1 to FR-3.3)
+- [x] CI pipeline: build, test and lint on every push — and the job that runs the
+      Testcontainers tests and applies the 10,000-employee seed to a real PostgreSQL
+- [ ] Deploy the single artifact (ADR-018 is decided but unbuilt: the Angular bundle is not
+      yet packaged into the jar, and there is no `demo` profile to seed a hosted database)
+      and record the demo
+- [ ] Measure a 10,000-employee run against the re-budgeted NFR-1.3. The elapsed time and
+      payslip count are now logged for every run, so this is a reading rather than an
+      argument — but it needs a database this machine does not have

@@ -164,6 +164,17 @@ export const routes: Routes = [
           ),
       },
       {
+        // ADMIN only, matching the write endpoints. HR reads these lists through the
+        // forms that need them; changing them alters what every record means.
+        path: 'reference-data',
+        title: 'Reference data · ACME Salary Management',
+        canActivate: [roleGuard('ADMIN')],
+        loadComponent: () =>
+          import('./features/reference-data/reference-data-admin/reference-data-admin').then(
+            (m) => m.ReferenceDataAdmin,
+          ),
+      },
+      {
         // ADMIN alone, and more strictly than anything else here: one page of this trail
         // spans every feature — which salaries changed, who changed them, what the
         // figures were. HR's access to employee data does not extend to the record of

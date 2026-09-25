@@ -25,13 +25,16 @@ dashboard, and the salary component definitions.
 
 Employee records are writable: create, edit, and record an exit. The **payroll cycle is
 complete** — list runs, start one, review the draft with per-employee loss-of-pay days,
-recompute, then finalise or cancel.
+recompute, then finalise or cancel. HR has a filterable register across every payslip,
+payslips download as PDFs, ADMIN has the audit trail and the reference-data lists, and any
+user can change their own password.
 
 Plus the EMPLOYEE screens: their own payslip list and a payslip view, with a role-aware
 landing so all three roles arrive somewhere useful.
 
-Not built: payslip PDF export, the HR-facing payslip list, change password, and the audit
-trail.
+Every screen whose requirement is a `Must` or a `Should` now exists. What is left is
+deployment: ADR-018's single artifact — the Angular bundle packaged into the Spring Boot
+jar — is decided but not built, so the two are still served separately in development.
 
 ## Things that will look wrong until you know why
 
@@ -97,5 +100,18 @@ trail.
   clock is not authoritative.
 - **One flat hue for every bar on the dashboard.** Shading by value would encode the same
   number twice, since the row already names the category.
+- **A PDF download cannot be a plain link.** Every API request carries a bearer token added
+  by an interceptor, and a link navigation carries no headers — so the payslip PDF is
+  fetched as a blob and handed to the browser by `shared/download.ts`. A `<a download>`
+  would 401.
+- **The audit screen formats timestamps with `Intl`, and that is not a contradiction.**
+  Everywhere else dates are formatted by splitting the string, because a `LocalDate` has no
+  timezone and `new Date("2022-06-01")` would shift it. An audit timestamp is the opposite
+  case: a real instant with a zone, so converting it to the reader's local time is correct.
+- **The register keeps its filters in component state, not the URL.** The employee list
+  does the opposite, deliberately. A filtered employee list is a link worth sharing; a
+  payslip lookup is momentary, and the URL machinery needs its own validation and tests
+  (`employee-query.ts`) to be worth it. The one exception is `?employeeId=`, which is how
+  the employee record links in.
 - **The app is zoneless.** Anything a template reads must be a signal or an input; a
   mutated plain field will not re-render.

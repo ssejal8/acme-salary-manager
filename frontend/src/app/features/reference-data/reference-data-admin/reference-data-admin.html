@@ -1,0 +1,242 @@
+<header class="page-header">
+  <div>
+    <h1 class="page-header__title">Reference data</h1>
+    <p class="page-header__subtitle">
+      The vocabulary every employee record and report is expressed in. Nothing here can be
+      deleted: employees reference these rows, so removing one would orphan the history
+      that names it — a department that is no longer used simply stops being chosen.
+    </p>
+  </div>
+</header>
+
+@if (loadError(); as message) {
+  <p class="alert alert--error" role="alert">{{ message }}</p>
+}
+
+@if (generalError(); as message) {
+  <p class="alert alert--error" role="alert">{{ message }}</p>
+}
+
+@if (outcome(); as message) {
+  <p class="alert alert--info" role="status">{{ message }}</p>
+}
+
+<section class="card section" aria-labelledby="departments-heading">
+  <h2 class="section__title" id="departments-heading">Departments</h2>
+  <p class="section__note">
+    A code and a name. The code appears in reports and saved filters, so it cannot be
+    changed once the department exists.
+  </p>
+
+  <form class="section__form" [formGroup]="departmentForm" (ngSubmit)="submitDepartment()" novalidate>
+    <div class="field">
+      <label class="field__label" for="department-code">Code</label>
+      <input
+        id="department-code"
+        class="input code"
+        [class.input--invalid]="fieldError('code')"
+        type="text"
+        formControlName="code"
+        maxlength="20"
+        autocapitalize="characters"
+        autocomplete="off"
+        [attr.aria-invalid]="!!fieldError('code')"
+        [attr.aria-describedby]="fieldError('code') ? 'department-code-error' : null"
+      />
+      @if (fieldError('code'); as message) {
+        <p class="field__error" id="department-code-error">{{ message }}</p>
+      }
+    </div>
+
+    <div class="field">
+      <label class="field__label" for="department-name">Name</label>
+      <input
+        id="department-name"
+        class="input"
+        [class.input--invalid]="fieldError('name')"
+        type="text"
+        formControlName="name"
+        maxlength="120"
+        autocomplete="off"
+        required
+        [attr.aria-invalid]="!!fieldError('name')"
+        [attr.aria-describedby]="fieldError('name') ? 'department-name-error' : null"
+      />
+      @if (fieldError('name'); as message) {
+        <p class="field__error" id="department-name-error">{{ message }}</p>
+      }
+    </div>
+
+    <div class="section__actions">
+      <button class="button button--primary" type="submit" [disabled]="saving()">
+        {{ isEditingDepartment() ? 'Save name' : 'Add department' }}
+      </button>
+      @if (isEditingDepartment()) {
+        <button type="button" class="button button--secondary" (click)="reset()">Cancel</button>
+      }
+    </div>
+  </form>
+
+  <ul class="rows">
+    @for (department of departments(); track department.id) {
+      <li class="rows__row">
+        <span class="rows__label">
+          <span class="code">{{ department.code }}</span>
+          {{ department.name }}
+        </span>
+        <button
+          type="button"
+          class="button button--secondary button--compact"
+          (click)="editDepartment(department)"
+        >
+          Rename
+        </button>
+      </li>
+    }
+  </ul>
+</section>
+
+<section class="card section" aria-labelledby="designations-heading">
+  <h2 class="section__title" id="designations-heading">Designations</h2>
+  <p class="section__note">Job titles, unique whatever their capitalisation.</p>
+
+  <form class="section__form" [formGroup]="designationForm" (ngSubmit)="submitDesignation()" novalidate>
+    <div class="field section__field--wide">
+      <label class="field__label" for="designation-title">Title</label>
+      <input
+        id="designation-title"
+        class="input"
+        [class.input--invalid]="fieldError('title')"
+        type="text"
+        formControlName="title"
+        maxlength="120"
+        autocomplete="off"
+        required
+        [attr.aria-invalid]="!!fieldError('title')"
+        [attr.aria-describedby]="fieldError('title') ? 'designation-title-error' : null"
+      />
+      @if (fieldError('title'); as message) {
+        <p class="field__error" id="designation-title-error">{{ message }}</p>
+      }
+    </div>
+
+    <div class="section__actions">
+      <button class="button button--primary" type="submit" [disabled]="saving()">
+        {{ isEditingDesignation() ? 'Save title' : 'Add designation' }}
+      </button>
+      @if (isEditingDesignation()) {
+        <button type="button" class="button button--secondary" (click)="reset()">Cancel</button>
+      }
+    </div>
+  </form>
+
+  <ul class="rows">
+    @for (designation of designations(); track designation.id) {
+      <li class="rows__row">
+        <span class="rows__label">{{ designation.title }}</span>
+        <button
+          type="button"
+          class="button button--secondary button--compact"
+          (click)="editDesignation(designation)"
+        >
+          Retitle
+        </button>
+      </li>
+    }
+  </ul>
+</section>
+
+<section class="card section" aria-labelledby="grades-heading">
+  <h2 class="section__title" id="grades-heading">Grades and CTC bands</h2>
+  <p class="section__note">
+    A band is what a compensation package is checked against (FR-4.3). Leave a bound blank
+    for "no limit" — blank is not zero, and an unbounded side never rejects a package.
+    Amending a band applies to the next assignment; packages already agreed are a record of
+    what was agreed and are not re-validated.
+  </p>
+
+  <form class="section__form" [formGroup]="gradeForm" (ngSubmit)="submitGrade()" novalidate>
+    <div class="field">
+      <label class="field__label" for="grade-name">Name</label>
+      <input
+        id="grade-name"
+        class="input"
+        [class.input--invalid]="fieldError('name')"
+        type="text"
+        formControlName="name"
+        maxlength="20"
+        autocomplete="off"
+        required
+        [attr.aria-invalid]="!!fieldError('name')"
+      />
+    </div>
+
+    <div class="field">
+      <label class="field__label" for="grade-min">Minimum annual CTC</label>
+      <input
+        id="grade-min"
+        class="input numeric"
+        [class.input--invalid]="fieldError('minCtc')"
+        type="text"
+        inputmode="decimal"
+        formControlName="minCtc"
+        autocomplete="off"
+        [attr.aria-invalid]="!!fieldError('minCtc')"
+        [attr.aria-describedby]="fieldError('minCtc') ? 'grade-min-error' : null"
+      />
+      @if (fieldError('minCtc'); as message) {
+        <p class="field__error" id="grade-min-error">{{ message }}</p>
+      }
+    </div>
+
+    <div class="field">
+      <label class="field__label" for="grade-max">Maximum annual CTC</label>
+      <input
+        id="grade-max"
+        class="input numeric"
+        [class.input--invalid]="fieldError('maxCtc')"
+        type="text"
+        inputmode="decimal"
+        formControlName="maxCtc"
+        autocomplete="off"
+        [attr.aria-invalid]="!!fieldError('maxCtc')"
+        [attr.aria-describedby]="fieldError('maxCtc') ? 'grade-max-error' : null"
+      />
+      @if (fieldError('maxCtc'); as message) {
+        <p class="field__error" id="grade-max-error">{{ message }}</p>
+      }
+    </div>
+
+    <div class="section__actions">
+      <button class="button button--primary" type="submit" [disabled]="saving()">
+        {{ isEditingGrade() ? 'Save grade' : 'Add grade' }}
+      </button>
+      @if (isEditingGrade()) {
+        <button type="button" class="button button--secondary" (click)="reset()">Cancel</button>
+      }
+    </div>
+  </form>
+
+  <ul class="rows">
+    @for (grade of grades(); track grade.id) {
+      <li class="rows__row">
+        <span class="rows__label">
+          {{ grade.name }}
+          <span class="rows__band">
+            <!-- An absent bound reads as "no limit", never as zero. -->
+            {{ grade.minCtc ? (grade.minCtc | money) : 'No minimum' }}
+            –
+            {{ grade.maxCtc ? (grade.maxCtc | money) : 'No maximum' }}
+          </span>
+        </span>
+        <button
+          type="button"
+          class="button button--secondary button--compact"
+          (click)="editGrade(grade)"
+        >
+          Amend
+        </button>
+      </li>
+    }
+  </ul>
+</section>

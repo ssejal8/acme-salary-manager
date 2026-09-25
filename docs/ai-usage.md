@@ -94,8 +94,8 @@ Nothing here is "the model said it works". Every task ended with evidence.
 **Always:**
 
 ```bash
-cd backend  && ./mvnw test      # 546 tests (44 are Testcontainers ITs, skipped without Docker)
-cd frontend && npm test         # 396 tests
+cd backend  && ./mvnw test      # 686 tests (53 are Testcontainers ITs, skipped without Docker — CI runs them)
+cd frontend && npm test         # 537 tests
 cd frontend && npm run lint     # ESLint over TypeScript and templates
 cd frontend && npm run build    # the production bundle must compile
 ```
@@ -111,6 +111,9 @@ cd frontend && npm run build    # the production bundle must compile
 | The favicon is legible at 16px | Rendered and **looked at**. The first version's crossbar sat high enough that the counter closed into a blob at tab size; the mark was adjusted and re-rendered. |
 | The hand-assembled `.ico` is a valid container | Parsed back byte by byte — three directory entries, each a valid PNG at its declared size, every offset in range — then confirmed with `file`. |
 | The lockfile resolves from the public npm registry | `npm ci` into a clean directory **with an empty cache**, proving the integrity hashes match the public tarballs and not just that the URLs look right. |
+| The generated PDF says what it should | Its text is extracted back out with `PDFTextStripper` and asserted line by line. A test checking for a `%PDF-` header would pass for a blank page. |
+| A new dependency does not arrive through a corporate mirror | `backend/.mvn/settings.xml` resolves from Maven Central, applied automatically by `.mvn/maven.config`; PDFBox's `_remote.repositories` records `central`, not the mirror. |
+| The API answers the right status for an operation it does not have | A test asserting that reference data cannot be deleted found a `DELETE` answering **500**. It now answers 405 with an `Allow` header. |
 
 ---
 
@@ -128,6 +131,9 @@ The useful half of this document.
 | The seed's verification block nested an aggregate inside an aggregate — invalid SQL that would have failed at startup. | The PostgreSQL parser, before the file was ever run. |
 | The favicon's SVG comment contained `--`, which is illegal inside an XML comment. | The rasteriser refused the file. |
 | Dependencies silently resolved through a corporate Artifactory mirror, baking 692 internal URLs into `package-lock.json`. | Inspecting the lockfile's hosts. Fixed project-scoped, in the repository's own `.npmrc`, without touching machine configuration that other work depends on. |
+| A screen fetched its data in the constructor, before the router had bound its `employeeId` input — so the "payslips for this employee" filter would silently never have applied. | A test that set the input and then asserted the request. The fetch is now driven by the input, which also makes navigating back to everyone's payslips refetch. |
+| Paging the run review table would have quietly broken loss-of-pay: the adjustment list is the whole run (FR-5.6), so sending it from one visible page would clear everybody else's unpaid days. | Noticing the requirement while changing the screen, and pinning it with a test that edits page two and recomputes from page one. |
+| A record method named `publishedOnly()` silently replaced the record component accessor of the same name, changing its return type. | The compiler, immediately — but only because the call site happened to be type-checked. Renamed, with the reason recorded where the method is. |
 | Documentation drifting ahead of the code — claiming payroll runs had "no UI" after one was built, and describing `features/payslips` as unbuilt. | Grepping the docs for claims about the thing being changed, as part of the change. |
 
 The pattern: **the failures were caught by something mechanical** — a test, a parser, a
@@ -149,9 +155,14 @@ Stated here rather than left to be discovered:
   machine without Docker has not verified the schema, the column types, or the queries.
 - **Nothing is deployed**, and there is no CI pipeline, so no build has been proven on a
   machine other than a development one.
-- **The run review screen pages its payslip table in the browser.** The API returns every
-  payslip in the run, so at 10,000 employees the payload is large even though the DOM is
-  not. A paged payslip endpoint is the fix and is outstanding.
+- **NFR-1.3's budget has not been measured.** A run now logs its elapsed time and payslip
+  count on every execution, which turns the question into a reading — but the reading needs
+  a database, and this machine has none. The number in the requirement is a budget, not an
+  observation, and it is labelled as such.
+- **The single-artifact deployment (ADR-018) is decided but unbuilt**, so nothing is
+  deployed and no demo has been recorded. That is the largest remaining gap.
+- **The PDF has been rendered and asserted, but never printed.** Its text is verified; its
+  visual layout on paper is not, and nothing here can verify that.
 - **The 10,000-employee seed makes NFR-1.3 a live question**, not a theoretical one: a run
   over this dataset is ~9,900 payslips in one transaction against a 60-second budget
   written for 1,000.
