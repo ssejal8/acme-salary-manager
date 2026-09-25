@@ -70,6 +70,12 @@ export class Shell {
       available: this.auth.canManageEmployees(),
     },
     {
+      // ADMIN only, matching the endpoint — the one area HR cannot reach at all.
+      path: '/audit',
+      label: 'Audit trail',
+      available: this.auth.hasAnyRole('ADMIN'),
+    },
+    {
       // Reading definitions is ADMIN/HR; only ADMIN may add one, which the screen itself
       // reflects. Hiding the whole area from HR would hide the vocabulary their own
       // packages are built from.
@@ -78,6 +84,8 @@ export class Shell {
       available: this.auth.canManageEmployees(),
     },
   ]);
+
+  readonly isAdmin = computed(() => this.auth.hasAnyRole('ADMIN'));
 
   readonly visibleNavItems = computed(() => this.navItems().filter((item) => item.available));
 

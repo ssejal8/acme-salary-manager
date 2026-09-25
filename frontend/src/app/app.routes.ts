@@ -164,6 +164,17 @@ export const routes: Routes = [
           ),
       },
       {
+        // ADMIN alone, and more strictly than anything else here: one page of this trail
+        // spans every feature — which salaries changed, who changed them, what the
+        // figures were. HR's access to employee data does not extend to the record of
+        // everybody's actions, including their own.
+        path: 'audit',
+        title: 'Audit trail · ACME Salary Management',
+        canActivate: [roleGuard('ADMIN')],
+        loadComponent: () =>
+          import('./features/audit/audit-trail/audit-trail').then((m) => m.AuditTrail),
+      },
+      {
         // Every authenticated role: changing your own password is not a privilege, and the
         // endpoint behind it takes no user id, so there is nothing here to restrict.
         path: 'change-password',

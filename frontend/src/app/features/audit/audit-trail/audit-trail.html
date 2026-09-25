@@ -1,0 +1,174 @@
+<header class="page-header">
+  <div>
+    <h1 class="page-header__title">Audit trail</h1>
+    <p class="page-header__subtitle">
+      Every create, update and state transition on employees, salary structures and payroll
+      runs, with the actor and the moment. Append-only: nothing here can be edited or
+      removed, including by you.
+    </p>
+  </div>
+  <p class="page-header__meta">
+    @if (!loading()) {
+      @if (page().totalElements > 0) {
+        Showing {{ range().from }}–{{ range().to }} of {{ page().totalElements }}
+      } @else {
+        Nothing recorded
+      }
+    }
+  </p>
+</header>
+
+@if (errorMessage(); as message) {
+  <p class="alert alert--error" role="alert">{{ message }}</p>
+}
+
+<search class="filters card">
+  <h2 class="visually-hidden">Filter the audit trail</h2>
+
+  <div class="filters__grid">
+    <div class="field">
+      <label class="field__label" for="filter-entity">Record type</label>
+      <select
+        id="filter-entity"
+        class="select"
+        [value]="entityType()"
+        (change)="setEntityType($any($event.target).value)"
+      >
+        <option value="">Everything</option>
+        @for (type of entityTypes; track type) {
+          <option [value]="type">{{ readable(type) }}</option>
+        }
+      </select>
+    </div>
+
+    <div class="field">
+      <label class="field__label" for="filter-action">Action</label>
+      <select
+        id="filter-action"
+        class="select"
+        [value]="action()"
+        (change)="setAction($any($event.target).value)"
+      >
+        <option value="">Any action</option>
+        @for (name of actions; track name) {
+          <option [value]="name">{{ readable(name) }}</option>
+        }
+      </select>
+    </div>
+
+    <div class="field">
+      <label class="field__label" for="filter-from">From</label>
+      <input
+        id="filter-from"
+        class="input"
+        type="date"
+        [value]="from()"
+        (change)="setFrom($any($event.target).value)"
+      />
+    </div>
+
+    <div class="field">
+      <label class="field__label" for="filter-to">To</label>
+      <input
+        id="filter-to"
+        class="input"
+        type="date"
+        [value]="to()"
+        (change)="setTo($any($event.target).value)"
+      />
+    </div>
+
+    <div class="field filters__actions">
+      <button type="button" class="button button--secondary button--compact" (click)="clearFilters()">
+        Clear filters
+      </button>
+    </div>
+  </div>
+
+  <p class="filters__note">
+    Both dates are inclusive, and the boundaries are UTC — which is also what the
+    timestamps are stored in, though they are shown below in your own timezone.
+  </p>
+</search>
+
+@if (!loading() && page().totalElements === 0 && !errorMessage()) {
+  <div class="card">
+    <app-empty-state
+      title="Nothing matches"
+      hint="Actions are recorded as they happen, inside the same transaction as the change — so an empty trail means nothing has been done yet, not that something failed to record."
+    />
+  </div>
+}
+
+@if (page().content.length > 0) {
+  <section class="card trail" aria-label="Audit trail">
+    <div class="table-scroll" tabindex="0" role="region" aria-label="Audit trail table">
+      <table class="events">
+        <thead>
+          <tr>
+            <th scope="col">When</th>
+            <th scope="col">Action</th>
+            <th scope="col">Record</th>
+            <th scope="col">Actor</th>
+            <th scope="col">Recorded context</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (event of page().content; track event.id) {
+            <tr>
+              <th scope="row" class="events__when">{{ occurredAt(event) }}</th>
+              <td class="events__action">{{ readable(event.action) }}</td>
+              <td class="events__entity">
+                {{ readable(event.entityType) }}
+                @if (event.entityId !== undefined) {
+                  <span class="events__id code">#{{ event.entityId }}</span>
+                }
+              </td>
+              <td class="events__actor">{{ actor(event) }}</td>
+              <td>
+                @if (detailPairs(event).length > 0) {
+                  <!--
+                    Rendered as pairs rather than as raw JSON: an operator reading a trail
+                    should not have to read a data structure.
+                  -->
+                  <dl class="details">
+                    @for (pair of detailPairs(event); track pair.key) {
+                      <div class="details__pair">
+                        <dt class="details__key">{{ pair.key }}</dt>
+                        <dd class="details__value">{{ pair.value }}</dd>
+                      </div>
+                    }
+                  </dl>
+                } @else {
+                  <span class="events__none">—</span>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    @if (page().hasPrevious || page().hasNext) {
+      <nav class="pager" aria-label="Pagination">
+        <button
+          type="button"
+          class="button button--secondary button--compact"
+          [disabled]="!page().hasPrevious || loading()"
+          (click)="load(page().page - 1)"
+        >
+          Previous
+        </button>
+        <span class="pager__position">Page {{ page().page + 1 }} of {{ page().totalPages }}</span>
+        <button
+          type="button"
+          class="button button--secondary button--compact"
+          [disabled]="!page().hasNext || loading()"
+          (click)="load(page().page + 1)"
+        >
+          Next
+        </button>
+      </nav>
+    }
+  </section>
+}
