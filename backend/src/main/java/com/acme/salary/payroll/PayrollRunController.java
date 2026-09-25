@@ -4,6 +4,7 @@ import com.acme.salary.common.web.PageResponse;
 import com.acme.salary.common.web.PageableSanitizer;
 import com.acme.salary.payroll.dto.PayrollRunDetailResponse;
 import com.acme.salary.payroll.dto.PayrollRunSummaryResponse;
+import com.acme.salary.payroll.dto.PayslipRowResponse;
 import com.acme.salary.payroll.dto.RecomputePayrollRunRequest;
 import com.acme.salary.payroll.dto.StartPayrollRunRequest;
 import io.swagger.v3.oas.annotations.Operation;
@@ -55,8 +56,16 @@ public class PayrollRunController {
 
     private final PayrollRunService runs;
 
-    public PayrollRunController(PayrollRunService runs) {
+    /**
+     * The payslip search, reused rather than duplicated: "the payslips of run 7" is one
+     * filter on the same query the register and the HR-wide list use, and a second
+     * implementation of it would be a second thing to keep paged and authorised.
+     */
+    private final PayslipService payslips;
+
+    public PayrollRunController(PayrollRunService runs, PayslipService payslips) {
         this.runs = runs;
+        this.payslips = payslips;
     }
 
     @PostMapping
@@ -97,6 +106,26 @@ public class PayrollRunController {
     @Operation(summary = "Get a payroll run with every payslip in it")
     public PayrollRunDetailResponse get(@PathVariable Long id) {
         return runs.findById(id);
+    }
+
+    @GetMapping("/{id}/payslips")
+    @PreAuthorize("hasAnyRole('ADMIN', 'HR')")
+    @Operation(
+            summary = "The payslips in one run, paged",
+            description = """
+                    One row per employee with paid days, gross, deductions and net — the
+                    payroll register for the run's period (FR-7.1), and what the review
+                    screen reads.
+
+                    Paged in the database, which is why it exists alongside
+                    `GET /payroll-runs/{id}`: that endpoint returns the run with every
+                    payslip and its lines, which at ten thousand employees is tens of
+                    megabytes for a table showing none of the lines.""")
+    public PageResponse<PayslipRowResponse> payslips(
+            @PathVariable Long id,
+            @Parameter(description = "Standard page, size and sort parameters")
+            @PageableDefault(size = 25) Pageable pageable) {
+        return payslips.search(PayslipSearch.forRun(id), pageable);
     }
 
     @PostMapping("/{id}/recompute")

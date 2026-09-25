@@ -1,26 +1,34 @@
 package com.acme.salary.payroll;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-
 import com.acme.salary.common.error.NotFoundException;
 import com.acme.salary.common.money.Money;
+import com.acme.salary.common.web.PageResponse;
 import com.acme.salary.payroll.dto.PayslipDetailResponse;
 import com.acme.salary.payroll.dto.PayslipLineResponse;
+import com.acme.salary.payroll.dto.PayslipRowResponse;
 import com.acme.salary.salarycomponent.ComponentType;
 import com.acme.salary.support.ApiSecurityTestConfig;
 import java.time.Instant;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.test.context.support.WithAnonymousUser;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -38,6 +46,12 @@ class PayslipControllerTest {
 
     @MockitoBean
     private PayslipService payslips;
+
+    @Captor
+    private ArgumentCaptor<PayslipSearch> searchCaptor;
+
+    @Captor
+    private ArgumentCaptor<Pageable> pageableCaptor;
 
     private static PayslipDetailResponse payslip() {
         return new PayslipDetailResponse(
@@ -179,5 +193,121 @@ class PayslipControllerTest {
                 .andExpect(jsonPath("$.status").value(401));
         mockMvc.perform(get(PAYSLIPS + "/90"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    /** The paged search (FR-6.5), and the register when a period is given (FR-7.1). */
+    @Nested
+    @DisplayName("GET /payslips")
+    class Searching {
+
+        private PageResponse<PayslipRowResponse> onePage() {
+            return new PageResponse<>(
+                    List.of(new PayslipRowResponse(
+                            90L, 7L, 2026, 4, "2026-04", PayrollRunStatus.FINALISED, true,
+                            1001L, "E-1001", "Asha Menon", "Engineering",
+                            30, 30, 0,
+                            Money.of("150000.00"), Money.of("9200.00"), Money.of("140800.00"))),
+                    0, 20, 1, 1, false, false);
+        }
+
+        @Test
+        @WithMockUser(roles = "HR")
+        void returnsThePublishedPageShape() throws Exception {
+            when(payslips.search(any(), any())).thenReturn(onePage());
+
+            mockMvc.perform(get("/api/v1/payslips"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.content[0].employeeName").value("Asha Menon"))
+                    .andExpect(jsonPath("$.content[0].period").value("2026-04"))
+                    .andExpect(jsonPath("$.content[0].netPay").value("140800.00"))
+                    .andExpect(jsonPath("$.totalElements").value(1))
+                    .andExpect(jsonPath("$.hasNext").value(false));
+        }
+
+        @Test
+        @WithMockUser(roles = "HR")
+        void bindsEveryFilterOntoTheSearch() throws Exception {
+            when(payslips.search(searchCaptor.capture(), any())).thenReturn(onePage());
+
+            mockMvc.perform(get("/api/v1/payslips")
+                            .param("runId", "7")
+                            .param("periodYear", "2026")
+                            .param("periodMonth", "4")
+                            .param("departmentId", "3")
+                            .param("employeeId", "1001"))
+                    .andExpect(status().isOk());
+
+            PayslipSearch search = searchCaptor.getValue();
+            assertThat(search.runId()).isEqualTo(7L);
+            assertThat(search.periodYear()).isEqualTo(2026);
+            assertThat(search.periodMonth()).isEqualTo(4);
+            assertThat(search.departmentId()).isEqualTo(3L);
+            assertThat(search.employeeId()).isEqualTo(1001L);
+            // Never set from a request parameter: the service decides it from the role.
+            assertThat(search.publishedOnly()).isFalse();
+        }
+
+        @Test
+        @WithMockUser(roles = "HR")
+        void defaultsToNewestPeriodFirstWithATiebreaker() throws Exception {
+            // Paging without a total order can repeat or skip rows between pages, and a
+            // period is the same value for every row in a run.
+            when(payslips.search(any(), pageableCaptor.capture())).thenReturn(onePage());
+
+            mockMvc.perform(get("/api/v1/payslips")).andExpect(status().isOk());
+
+            assertThat(pageableCaptor.getValue().getSort()).isEqualTo(Sort.by(
+                    Sort.Order.desc("run.periodYear"),
+                    Sort.Order.desc("run.periodMonth"),
+                    Sort.Order.asc("employeeId")));
+        }
+
+        @Test
+        @WithMockUser(roles = "HR")
+        void translatesAWhitelistedSortKey() throws Exception {
+            when(payslips.search(any(), pageableCaptor.capture())).thenReturn(onePage());
+
+            mockMvc.perform(get("/api/v1/payslips").param("sort", "netPay,desc"))
+                    .andExpect(status().isOk());
+
+            assertThat(pageableCaptor.getValue().getSort())
+                    .isEqualTo(Sort.by(Sort.Direction.DESC, "netPay"));
+        }
+
+        @Test
+        @WithMockUser(roles = "HR")
+        void rejectsAnUnlistedSortKey() throws Exception {
+            // It would otherwise reach the query as a property path.
+            mockMvc.perform(get("/api/v1/payslips").param("sort", "employee.workEmail,asc"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.fieldErrors[0].field").value("sort"));
+        }
+
+        @Test
+        @WithMockUser(roles = "HR")
+        void capsAnOversizedPageRequest() throws Exception {
+            when(payslips.search(any(), pageableCaptor.capture())).thenReturn(onePage());
+
+            mockMvc.perform(get("/api/v1/payslips").param("size", "5000"))
+                    .andExpect(status().isOk());
+
+            assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(100);
+        }
+
+        @Test
+        @WithMockUser(roles = "EMPLOYEE")
+        void isOpenToAnEmployeeBecauseTheServiceNarrowsIt() throws Exception {
+            // Reachable, but the service pins the query to their own published payslips —
+            // the role check is the outer of two, as everywhere else here.
+            when(payslips.search(any(), any())).thenReturn(onePage());
+
+            mockMvc.perform(get("/api/v1/payslips")).andExpect(status().isOk());
+        }
+
+        @Test
+        @WithAnonymousUser
+        void needsAToken() throws Exception {
+            mockMvc.perform(get("/api/v1/payslips")).andExpect(status().isUnauthorized());
+        }
     }
 }

@@ -21,10 +21,13 @@ import com.acme.salary.payroll.dto.PayrollRunDetailResponse;
 import com.acme.salary.payroll.dto.PayrollRunSummaryResponse;
 import com.acme.salary.payroll.dto.PayslipLineResponse;
 import com.acme.salary.payroll.dto.PayslipResponse;
+import com.acme.salary.payroll.dto.PayslipRowResponse;
 import com.acme.salary.salarycomponent.ComponentType;
 import com.acme.salary.support.ApiSecurityTestConfig;
 import java.time.Instant;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
@@ -34,6 +37,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithAnonymousUser;
 import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -50,8 +54,21 @@ class PayrollRunControllerTest {
     @MockitoBean
     private PayrollRunService runs;
 
+    /**
+     * The controller delegates its paged payslip endpoint to the payslip search rather
+     * than reimplementing one, so this collaborator has to exist for the context to start.
+     */
+    @MockitoBean
+    private PayslipService payslips;
+
     @Captor
     private ArgumentCaptor<PayrollPeriod> periodCaptor;
+
+    @Captor
+    private ArgumentCaptor<PayslipSearch> searchCaptor;
+
+    @Captor
+    private ArgumentCaptor<Pageable> pageableCaptor;
 
     @Captor
     private ArgumentCaptor<List<LopAdjustment>> adjustmentsCaptor;
@@ -313,5 +330,77 @@ class PayrollRunControllerTest {
         mockMvc.perform(get(RUNS))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.status").value(401));
+    }
+
+    /** The paged payslip endpoint, which is the register for the run's period (FR-7.1). */
+    @Nested
+    @DisplayName("GET /payroll-runs/{id}/payslips")
+    class RunPayslips {
+
+        private PageResponse<PayslipRowResponse> onePage() {
+            return new PageResponse<>(
+                    List.of(new PayslipRowResponse(
+                            90L, 7L, 2026, 4, "2026-04", PayrollRunStatus.DRAFT, false,
+                            1001L, "E-1001", "Asha Menon", "Engineering",
+                            30, 28, 2,
+                            Money.of("140000.00"), Money.of("9200.00"), Money.of("130800.00"))),
+                    0, 25, 1, 1, false, false);
+        }
+
+        @Test
+        @WithMockUser(roles = "HR")
+        void returnsRowsCarryingTheEmployeeName() throws Exception {
+            // The name a payslip cannot supply for itself: it holds an employee id, so the
+            // service resolves identities for the page.
+            when(payslips.search(any(), any())).thenReturn(onePage());
+
+            mockMvc.perform(get(RUNS + "/7/payslips"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.content[0].employeeCode").value("E-1001"))
+                    .andExpect(jsonPath("$.content[0].employeeName").value("Asha Menon"))
+                    .andExpect(jsonPath("$.content[0].department").value("Engineering"))
+                    .andExpect(jsonPath("$.content[0].netPay").value("130800.00"))
+                    .andExpect(jsonPath("$.content[0].published").value(false))
+                    .andExpect(jsonPath("$.size").value(25));
+        }
+
+        @Test
+        @WithMockUser(roles = "HR")
+        void searchesOnlyThatRun() throws Exception {
+            when(payslips.search(searchCaptor.capture(), pageableCaptor.capture()))
+                    .thenReturn(onePage());
+
+            mockMvc.perform(get(RUNS + "/7/payslips").param("page", "2").param("size", "10"))
+                    .andExpect(status().isOk());
+
+            assertThat(searchCaptor.getValue().runId()).isEqualTo(7L);
+            assertThat(searchCaptor.getValue().periodYear()).isNull();
+            assertThat(pageableCaptor.getValue().getPageNumber()).isEqualTo(2);
+            assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(10);
+        }
+
+        @Test
+        @WithMockUser(roles = "HR")
+        void pagesInsteadOfReturningTheWholeRun() throws Exception {
+            // Why this endpoint exists: GET /payroll-runs/{id} carries every payslip and
+            // its lines, which at ten thousand employees is tens of megabytes.
+            when(payslips.search(any(), pageableCaptor.capture())).thenReturn(onePage());
+
+            mockMvc.perform(get(RUNS + "/7/payslips")).andExpect(status().isOk());
+
+            assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(25);
+        }
+
+        @Test
+        @WithMockUser(roles = "EMPLOYEE")
+        void isNotReachableByAnEmployee() throws Exception {
+            mockMvc.perform(get(RUNS + "/7/payslips")).andExpect(status().isForbidden());
+        }
+
+        @Test
+        @WithAnonymousUser
+        void needsAToken() throws Exception {
+            mockMvc.perform(get(RUNS + "/7/payslips")).andExpect(status().isUnauthorized());
+        }
     }
 }

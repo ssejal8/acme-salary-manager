@@ -1,17 +1,22 @@
 package com.acme.salary.payroll;
 
 import com.acme.salary.common.error.NotFoundException;
+import com.acme.salary.common.web.PageResponse;
 import com.acme.salary.employee.EmployeeIdentity;
 import com.acme.salary.employee.EmployeeService;
 import com.acme.salary.payroll.dto.PayslipDetailResponse;
+import com.acme.salary.payroll.dto.PayslipRowResponse;
 import com.acme.salary.security.CurrentUser;
 import com.acme.salary.security.CurrentUserProvider;
 import com.acme.salary.security.Role;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,6 +50,13 @@ import org.springframework.transaction.annotation.Transactional;
 public class PayslipService {
 
     private static final Logger log = LoggerFactory.getLogger(PayslipService.class);
+
+    /**
+     * Stands in for "this caller owns nothing", so a search by somebody with no employee
+     * record returns an empty page rather than taking a different code path.
+     * Ids are positive, so this can never match a row.
+     */
+    private static final Long NO_SUCH_EMPLOYEE = -1L;
 
     private final PayslipRepository payslips;
     private final EmployeeService employees;
@@ -84,6 +96,63 @@ public class PayslipService {
             mine.add(PayslipDetailResponse.from(payslip, identity));
         }
         return mine;
+    }
+
+    /**
+     * A paged payslip list (FR-6.5), which is also the payroll register for a period
+     * (FR-7.1) and what the run review screen reads.
+     *
+     * <p>Two things happen here that the query cannot do for itself.
+     *
+     * <p><b>The caller's role decides what the search may see.</b> ADMIN and HR may list
+     * draft payslips, because reviewing a draft run is their job; anybody else is
+     * restricted to published ones in the database rather than filtered afterwards, so a
+     * total count can never disclose how many draft payslips exist. An EMPLOYEE is
+     * additionally pinned to their own employee id — this endpoint is not a route around
+     * {@code /me}.
+     *
+     * <p><b>Names are resolved in one batch.</b> A payslip holds its employee as an id, so
+     * each row needs the employee feature's identity port; done per row that is a query
+     * per payslip, which is the N+1 architecture §5.3 warns about.
+     */
+    @Transactional(readOnly = true)
+    public PageResponse<PayslipRowResponse> search(PayslipSearch search, Pageable pageable) {
+        CurrentUser caller = currentUser.require();
+        PayslipSearch effective = restrictToCaller(caller, search);
+
+        Page<Payslip> page = payslips.search(
+                effective.runId(),
+                // A month without a year is not a period, so neither is honoured alone.
+                effective.hasCompletePeriod() ? effective.periodYear() : null,
+                effective.hasCompletePeriod() ? effective.periodMonth() : null,
+                effective.departmentId(),
+                effective.employeeId(),
+                effective.publishedOnly(),
+                pageable);
+
+        Map<Long, EmployeeIdentity> identities = employees.identitiesOf(
+                page.getContent().stream().map(Payslip::getEmployeeId).distinct().toList());
+
+        return PageResponse.of(page, payslip ->
+                PayslipRowResponse.from(payslip, identities.get(payslip.getEmployeeId())));
+    }
+
+    /**
+     * Narrows a search to what this caller is allowed to ask for.
+     *
+     * <p>Returned as a new search rather than applied as a post-filter, because a filter
+     * applied after paging would report page counts and totals for rows the caller may
+     * not have.
+     */
+    private PayslipSearch restrictToCaller(CurrentUser caller, PayslipSearch search) {
+        if (caller.role() == Role.ADMIN || caller.role() == Role.HR) {
+            return search;
+        }
+        Long self = employees.findSelf(caller.id()).map(EmployeeIdentity::employeeId).orElse(null);
+        // No employee record means nothing of their own to list. An id that cannot match
+        // any row is used rather than an early return, so the answer is a real empty page
+        // with real totals rather than a special case.
+        return search.restrictedTo(self == null ? NO_SUCH_EMPLOYEE : self);
     }
 
     /**

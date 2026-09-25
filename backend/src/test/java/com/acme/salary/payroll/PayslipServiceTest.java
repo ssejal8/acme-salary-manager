@@ -3,8 +3,10 @@ package com.acme.salary.payroll;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -13,6 +15,8 @@ import com.acme.salary.common.money.Money;
 import com.acme.salary.employee.EmployeeIdentity;
 import com.acme.salary.employee.EmployeeService;
 import com.acme.salary.payroll.dto.PayslipDetailResponse;
+import com.acme.salary.common.web.PageResponse;
+import com.acme.salary.payroll.dto.PayslipRowResponse;
 import com.acme.salary.salarycomponent.ComponentType;
 import com.acme.salary.security.CurrentUser;
 import com.acme.salary.security.CurrentUserProvider;
@@ -20,8 +24,10 @@ import com.acme.salary.security.Role;
 import com.acme.salary.support.EmployeeFixtures;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -29,6 +35,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 /**
  * Who may read which payslip.
@@ -364,6 +374,117 @@ class PayslipServiceTest {
 
             assertThat(service.findById(90L).publishedAt())
                     .isEqualTo(Instant.parse("2026-05-01T10:00:00Z"));
+        }
+    }
+
+    /**
+     * The paged search (FR-6.5, FR-7.1), where the role decides what the query may see.
+     *
+     * <p>These assert on the arguments reaching the repository rather than on filtered
+     * output, because that is the whole design: restricting after paging would report
+     * totals and page counts for rows the caller may not have.
+     */
+    @Nested
+    @DisplayName("searching payslips")
+    class Searching {
+
+        private final Pageable pageable = PageRequest.of(0, 20);
+
+        private void repositoryReturns(Payslip... rows) {
+            when(payslips.search(any(), any(), any(), any(), any(), anyBoolean(), any()))
+                    .thenReturn(new PageImpl<>(List.of(rows), pageable, rows.length));
+            when(employees.identitiesOf(any()))
+                    .thenReturn(Map.of(ASHA_EMPLOYEE_ID, identity(ASHA_EMPLOYEE_ID, "E-1001")));
+        }
+
+        @Test
+        void hrSearchesEveryPayslipIncludingDrafts() {
+            when(currentUser.require()).thenReturn(HR);
+            repositoryReturns(payslipFor(ASHA_EMPLOYEE_ID, 90L, PayrollRunStatus.DRAFT));
+
+            PageResponse<PayslipRowResponse> found = service.search(
+                    new PayslipSearch(null, 2026, 4, 3L, null, false), pageable);
+
+            assertThat(found.content()).singleElement().satisfies(row -> {
+                assertThat(row.employeeCode()).isEqualTo("E-1001");
+                assertThat(row.employeeName()).isEqualTo("Asha Menon");
+                assertThat(row.department()).isEqualTo("Engineering");
+                assertThat(row.period()).isEqualTo("2026-04");
+                assertThat(row.published()).isFalse();
+            });
+            verify(payslips).search(null, 2026, 4, 3L, null, false, pageable);
+        }
+
+        @Test
+        void adminSearchesOnTheSameTerms() {
+            when(currentUser.require()).thenReturn(ADMIN);
+            repositoryReturns();
+
+            service.search(PayslipSearch.forRun(7L), pageable);
+
+            verify(payslips).search(7L, null, null, null, null, false, pageable);
+        }
+
+        @Test
+        void anEmployeeIsPinnedToTheirOwnPublishedPayslips() {
+            // Not a route around /me: whatever they ask for, the query is narrowed to
+            // their own employee id and to finalised runs.
+            when(currentUser.require()).thenReturn(ASHA);
+            repositoryReturns();
+
+            service.search(new PayslipSearch(null, null, null, null, RAVI_EMPLOYEE_ID, false), pageable);
+
+            verify(payslips).search(null, null, null, null, ASHA_EMPLOYEE_ID, true, pageable);
+        }
+
+        @Test
+        void aCallerWithNoEmployeeRecordGetsAnEmptyPageRatherThanEveryones() {
+            // An EMPLOYEE login provisioned without a record. The id cannot match a row,
+            // so the answer is a real empty page with real totals.
+            when(currentUser.require())
+                    .thenReturn(new CurrentUser(77L, "nobody@acme.test", Role.EMPLOYEE));
+            when(employees.findSelf(77L)).thenReturn(Optional.empty());
+            repositoryReturns();
+
+            service.search(PayslipSearch.forRun(7L), pageable);
+
+            verify(payslips).search(7L, null, null, null, -1L, true, pageable);
+        }
+
+        @Test
+        void aMonthWithoutAYearIsNotAPeriodAndIsIgnored() {
+            // "March" of no particular year would otherwise match every March on record.
+            when(currentUser.require()).thenReturn(HR);
+            repositoryReturns();
+
+            service.search(new PayslipSearch(null, null, 3, null, null, false), pageable);
+
+            verify(payslips).search(null, null, null, null, null, false, pageable);
+        }
+
+        @Test
+        void resolvesNamesInOneBatchForThePageRatherThanPerRow() {
+            // A query per row is the N+1 architecture 5.3 warns about.
+            when(currentUser.require()).thenReturn(HR);
+            repositoryReturns(
+                    payslipFor(ASHA_EMPLOYEE_ID, 90L, PayrollRunStatus.FINALISED),
+                    payslipFor(ASHA_EMPLOYEE_ID, 91L, PayrollRunStatus.FINALISED));
+
+            service.search(PayslipSearch.forRun(7L), pageable);
+
+            verify(employees, times(1)).identitiesOf(any());
+            verify(employees, never()).identityOf(anyLong());
+        }
+
+        @Test
+        void passesThePageRequestStraightToTheDatabase() {
+            when(currentUser.require()).thenReturn(HR);
+            repositoryReturns();
+            Pageable requested = PageRequest.of(3, 50, Sort.by("netPay"));
+
+            service.search(PayslipSearch.forRun(7L), requested);
+
+            verify(payslips).search(7L, null, null, null, null, false, requested);
         }
     }
 }

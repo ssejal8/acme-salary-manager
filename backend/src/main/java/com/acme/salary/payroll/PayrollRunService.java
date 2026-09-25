@@ -23,6 +23,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -51,6 +53,8 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class PayrollRunService {
+
+    private static final Logger log = LoggerFactory.getLogger(PayrollRunService.class);
 
     private final PayrollRunRepository runs;
     private final EmployeeService employees;
@@ -85,6 +89,7 @@ public class PayrollRunService {
      */
     @Transactional
     public PayrollRunDetailResponse start(PayrollPeriod period) {
+        long startedAt = System.nanoTime();
         CurrentUser actor = currentUser.require();
         requirePeriodHasEnded(period);
 
@@ -107,6 +112,15 @@ public class PayrollRunService {
         PayrollRun saved = runs.save(run);
         audit.record(AuditEntityType.PAYROLL_RUN, saved.getId(), AuditAction.PAYROLL_RUN_CREATED,
                 summaryDetails(saved));
+
+        // Logged at INFO with the headcount, because NFR-1.3's budget is the one
+        // non-functional claim this system cannot check in a unit test: it depends on the
+        // database, the row count and the machine. A line per run turns "does a 10,000
+        // employee run fit in the budget" from an argument into a measurement anyone can
+        // read off a log, including in CI.
+        log.info("Payroll run {} for {} computed {} payslips in {} ms",
+                saved.getId(), period.describe(), computed.size(),
+                (System.nanoTime() - startedAt) / 1_000_000);
         return PayrollRunDetailResponse.from(saved);
     }
 

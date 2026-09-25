@@ -1,0 +1,171 @@
+# Build, test and lint on every push.
+#
+# Three jobs, deliberately separate: a frontend lint failure should not hide a backend
+# test failure, and the seed job proves something neither of the others can.
+#
+# The most valuable thing here is what CI can run that a laptop often cannot. The
+# backend's 44 `*IT` tests need Docker and skip silently without it, so a developer's
+# green build has not verified the schema, the column types or the queries. On a GitHub
+# runner Docker is present, so they actually run — and the seed job applies the 10,000
+# employee seed to a real PostgreSQL, which is the only way to know that file works.
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+# A new push supersedes an in-flight run of the same branch; there is nothing to learn
+# from finishing a build of code that has already been replaced.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (unit + integration)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          # The build targets Java 17 and runs on any later JDK; 21 is what development
+          # uses, so CI uses it too rather than testing a combination nobody runs.
+          java-version: '21'
+          distribution: temurin
+          cache: maven
+
+      # Testcontainers finds Docker on the runner, so the integration tests run here
+      # instead of skipping. This is the job that verifies the Flyway schema against a
+      # real PostgreSQL.
+      - name: Test
+        working-directory: backend
+        run: ./mvnw -B --no-transfer-progress test
+
+      - name: Package
+        working-directory: backend
+        run: ./mvnw -B --no-transfer-progress -DskipTests package
+
+      - name: Publish test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-surefire-reports
+          path: backend/target/surefire-reports/
+          if-no-files-found: warn
+
+  frontend:
+    name: Frontend (lint + test + build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          # Angular 21's floor is 22.12. `npm ci` respects frontend/.npmrc, which pins the
+          # public registry and sets legacy-peer-deps for the npm 10 resolver bug.
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        working-directory: frontend
+        run: npm ci
+
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Test
+        working-directory: frontend
+        run: npm test
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+
+  seed:
+    name: Seed (10,000 employees against real PostgreSQL)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: salary_mgmt
+          POSTGRES_USER: salary_app
+          POSTGRES_PASSWORD: salary_app_dev
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U salary_app -d salary_mgmt"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Applied with psql in migration order rather than through the application, so this
+      # job tests the SQL and nothing else. V902 verifies itself: a DO block re-costs every
+      # package and raises an exception if the employee count is wrong, a package falls
+      # outside its grade CTC band, or one deducts more than it pays — so a failure here is
+      # a named reason rather than a silently odd dataset.
+      - name: Apply schema and seeds
+        env:
+          PGPASSWORD: salary_app_dev
+        run: |
+          set -euo pipefail
+          cd backend/src/main/resources/db
+          for file in migration/V1__baseline_schema.sql \
+                      seed/V900__dev_seed.sql \
+                      seed/V901__dev_employee_seed.sql \
+                      seed/V902__bulk_employee_seed.sql; do
+            echo "--- applying $file"
+            psql -h localhost -U salary_app -d salary_mgmt -v ON_ERROR_STOP=1 -f "$file"
+          done
+
+      - name: Assert the dataset the README documents
+        env:
+          PGPASSWORD: salary_app_dev
+        run: |
+          set -euo pipefail
+          assert() {
+            actual=$(psql -h localhost -U salary_app -d salary_mgmt -tAc "$2")
+            if [ "$actual" != "$3" ]; then
+              echo "::error::$1 — expected $3, got $actual"
+              exit 1
+            fi
+            echo "$1 = $actual"
+          }
+          assert "employees" "SELECT count(*) FROM employees" 10000
+          assert "leavers" "SELECT count(*) FROM employees WHERE status = 'INACTIVE'" 103
+          assert "salary structures" "SELECT count(*) FROM salary_structures" 9960
+          assert "structure lines" "SELECT count(*) FROM salary_structure_components" 59760
+          assert "employees without a package" \
+            "SELECT count(*) FROM employees e WHERE NOT EXISTS (SELECT 1 FROM salary_structures s WHERE s.employee_id = e.id)" \
+            41
+
+      # Idempotence is a claim the seed files make in their headers, so it is worth
+      # checking rather than trusting: every statement is ON CONFLICT DO NOTHING, and a
+      # re-run must leave the counts untouched.
+      - name: Re-apply the seeds and confirm nothing doubled
+        env:
+          PGPASSWORD: salary_app_dev
+        run: |
+          set -euo pipefail
+          cd backend/src/main/resources/db
+          for file in seed/V900__dev_seed.sql seed/V901__dev_employee_seed.sql \
+                      seed/V902__bulk_employee_seed.sql; do
+            psql -h localhost -U salary_app -d salary_mgmt -v ON_ERROR_STOP=1 -f "$file"
+          done
+          count=$(psql -h localhost -U salary_app -d salary_mgmt -tAc "SELECT count(*) FROM employees")
+          if [ "$count" != "10000" ]; then
+            echo "::error::re-running the seeds changed the employee count to $count"
+            exit 1
+          fi
+          echo "still 10000 employees after a second application"
