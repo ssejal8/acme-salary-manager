@@ -235,10 +235,29 @@ describe('PayslipView', () => {
   let component: PayslipView;
   let requestedIds: number[];
   let getResult: () => Observable<Payslip>;
+  let pdfRequests: number[];
+  let pdfResult: () => Observable<Blob>;
+  let saved: { name: string; size: number }[];
 
   beforeEach(() => {
     requestedIds = [];
     getResult = () => of(payslip());
+    pdfRequests = [];
+    pdfResult = () => of(new Blob(['%PDF-1.7 pretend'], { type: 'application/pdf' }));
+    saved = [];
+
+    // The browser's download plumbing, stubbed at its edges: what matters is that a blob
+    // of the right name reaches it, not that jsdom can save a file.
+    const createObjectURL = vi.fn(() => 'blob:payslip');
+    URL.createObjectURL = createObjectURL as unknown as typeof URL.createObjectURL;
+    URL.revokeObjectURL = vi.fn() as unknown as typeof URL.revokeObjectURL;
+    const click = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function recordClick(this: HTMLAnchorElement) {
+      saved.push({ name: this.download, size: 1 });
+    };
+    afterEach(() => {
+      HTMLAnchorElement.prototype.click = click;
+    });
 
     TestBed.configureTestingModule({
       providers: [
@@ -249,6 +268,10 @@ describe('PayslipView', () => {
             get: (id: number) => {
               requestedIds.push(id);
               return getResult();
+            },
+            downloadPdf: (id: number) => {
+              pdfRequests.push(id);
+              return pdfResult();
             },
           },
         },
@@ -344,6 +367,64 @@ describe('PayslipView', () => {
     fixture.detectChanges();
 
     expect(requestedIds).toEqual([90, 89]);
+  });
+
+
+  /** The PDF download (FR-6.4). */
+  describe('downloading the PDF', () => {
+    async function settle(): Promise<void> {
+      await fixture.whenStable();
+      fixture.detectChanges();
+    }
+
+    it('offers the download once the payslip has loaded', async () => {
+      await createComponent();
+
+      expect(text()).toContain('Download PDF');
+    });
+
+    it('fetches it as a blob for this payslip', async () => {
+      // Fetched rather than linked: the request needs the bearer token an interceptor
+      // adds, and a link navigation carries no headers.
+      await createComponent('90');
+
+      component.download();
+      await settle();
+
+      expect(pdfRequests).toEqual([90]);
+    });
+
+    it('saves it under a name that identifies the document', async () => {
+      await createComponent();
+
+      component.download();
+      await settle();
+
+      expect(saved.map((file) => file.name)).toEqual(['payslip-E-1001-2026-04.pdf']);
+    });
+
+    it('ignores a second click while one is in flight', async () => {
+      pdfResult = () => new Observable<Blob>(() => undefined);
+      await createComponent();
+
+      component.download();
+      component.download();
+
+      expect(pdfRequests).toHaveLength(1);
+    });
+
+    it("shows the interceptor's message when the download fails", async () => {
+      // A blob response carries no error envelope, so the status-based fallback speaks.
+      pdfResult = () => throwError(() => new ApiFailure(404, 'That record could not be found.'));
+      await createComponent();
+
+      component.download();
+      await settle();
+
+      expect(component.downloadError()).toBe('That record could not be found.');
+      expect(text()).toContain('That record could not be found.');
+      expect(saved).toEqual([]);
+    });
   });
 
   describe('a payslip that is not available', () => {

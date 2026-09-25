@@ -1,0 +1,204 @@
+<header class="page-header">
+  <div>
+    <h1 class="page-header__title">
+      {{ isRegister() ? 'Payroll register' : 'All payslips' }}
+    </h1>
+    <p class="page-header__meta">
+      @if (!loading()) {
+        @if (page().totalElements > 0) {
+          Showing {{ range().from }}–{{ range().to }} of {{ page().totalElements }}
+        } @else {
+          No matching payslips
+        }
+      }
+    </p>
+  </div>
+</header>
+
+@if (errorMessage(); as message) {
+  <p class="alert alert--error" role="alert">{{ message }}</p>
+}
+
+@if (filteredEmployeeId(); as employee) {
+  <!--
+    How the employee record links in: one person's payslips without this screen needing an
+    employee picker of its own.
+  -->
+  <p class="alert alert--info" role="status">
+    Showing payslips for employee #{{ employee }} only.
+    <a class="filters__clear" routerLink="/payslips/all">Show everyone</a>
+  </p>
+}
+
+<search class="filters card">
+  <h2 class="visually-hidden">Filter payslips</h2>
+
+  <div class="filters__grid">
+    <div class="field">
+      <label class="field__label" for="filter-month">Month</label>
+      <select
+        id="filter-month"
+        class="select"
+        [value]="periodMonth() ?? ''"
+        (change)="setPeriodMonth($any($event.target).value)"
+      >
+        <option value="">Any month</option>
+        @for (month of months; track month.value) {
+          <option [value]="month.value">{{ month.label }}</option>
+        }
+      </select>
+    </div>
+
+    <div class="field">
+      <label class="field__label" for="filter-year">Year</label>
+      <select
+        id="filter-year"
+        class="select"
+        [value]="periodYear() ?? ''"
+        (change)="setPeriodYear($any($event.target).value)"
+      >
+        <option value="">Any year</option>
+        @for (year of years; track year) {
+          <option [value]="year">{{ year }}</option>
+        }
+      </select>
+    </div>
+
+    <div class="field">
+      <label class="field__label" for="filter-department">Department</label>
+      <select
+        id="filter-department"
+        class="select"
+        [value]="departmentId() ?? ''"
+        (change)="setDepartment($any($event.target).value)"
+      >
+        <option value="">Every department</option>
+        @for (department of departments(); track department.id) {
+          <option [value]="department.id">{{ department.name }}</option>
+        }
+      </select>
+    </div>
+
+    <div class="field filters__actions">
+      <button type="button" class="button button--secondary button--compact" (click)="clearFilters()">
+        Clear filters
+      </button>
+    </div>
+  </div>
+
+  <p class="filters__note">
+    <!--
+      A month and a year are only honoured together: the API ignores a month on its own,
+      because "March" of no particular year matches every March on record.
+    -->
+    Choose both a month and a year for the register of a single period. Period totals live
+    on the payroll run itself — this table is one row per employee, not a sum.
+  </p>
+</search>
+
+@if (!loading() && page().totalElements === 0 && !errorMessage()) {
+  <div class="card">
+    <app-empty-state
+      title="No payslips match"
+      hint="Payslips appear once a payroll run has been started for a period — a draft's payslips are listed here for HR before they are published."
+    />
+  </div>
+}
+
+@if (page().content.length > 0) {
+  <section class="card register" aria-label="Payslips">
+    <div class="table-scroll" tabindex="0" role="region" aria-label="Payslips table">
+      <table class="payslips">
+        <thead>
+          <tr>
+            <th scope="col" [attr.aria-sort]="ariaSort('period')">
+              <button type="button" class="payslips__sort" (click)="sortBy('period')">
+                Period
+              </button>
+            </th>
+            <th scope="col">Employee</th>
+            <th scope="col">Department</th>
+            <th scope="col" class="payslips__amount" [attr.aria-sort]="ariaSort('paidDays')">
+              <button type="button" class="payslips__sort" (click)="sortBy('paidDays')">
+                Paid days
+              </button>
+            </th>
+            <th scope="col" class="payslips__amount" [attr.aria-sort]="ariaSort('grossPay')">
+              <button type="button" class="payslips__sort" (click)="sortBy('grossPay')">
+                Gross
+              </button>
+            </th>
+            <th scope="col" class="payslips__amount" [attr.aria-sort]="ariaSort('totalDeductions')">
+              <button type="button" class="payslips__sort" (click)="sortBy('totalDeductions')">
+                Deductions
+              </button>
+            </th>
+            <th scope="col" class="payslips__amount" [attr.aria-sort]="ariaSort('netPay')">
+              <button type="button" class="payslips__sort" (click)="sortBy('netPay')">
+                Net pay
+              </button>
+            </th>
+            <th scope="col">Status</th>
+            <th scope="col"><span class="visually-hidden">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (payslip of page().content; track payslip.id) {
+            <tr>
+              <th scope="row" class="payslips__period">{{ payslip | period }}</th>
+              <td class="payslips__employee">
+                {{ payslip.employeeName }}
+                <span class="payslips__code code">{{ payslip.employeeCode }}</span>
+              </td>
+              <td class="payslips__department">{{ payslip.department }}</td>
+              <td class="numeric">{{ payslip.paidDays }} / {{ payslip.totalDays }}</td>
+              <td class="numeric">{{ payslip.grossPay | money }}</td>
+              <td class="numeric">{{ payslip.totalDeductions | money }}</td>
+              <td class="numeric payslips__net">{{ payslip.netPay | money }}</td>
+              <td>
+                <!--
+                  Marked rather than hidden: HR sees a draft run's payslips before they are
+                  published, and whether the employee can see the same figures matters.
+                -->
+                @if (payslip.published) {
+                  <span class="badge badge--active">Published</span>
+                } @else {
+                  <span class="badge badge--inactive">{{ payslip.runStatus }}</span>
+                }
+              </td>
+              <td class="payslips__actions">
+                <a class="payslips__link" [routerLink]="['/payslips', payslip.id]">
+                  View<span class="visually-hidden">
+                    payslip for {{ payslip.employeeName }}, {{ payslip | period }}
+                  </span>
+                </a>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    @if (page().hasPrevious || page().hasNext) {
+      <nav class="pager" aria-label="Pagination">
+        <button
+          type="button"
+          class="button button--secondary button--compact"
+          [disabled]="!page().hasPrevious || loading()"
+          (click)="load(page().page - 1)"
+        >
+          Previous
+        </button>
+        <span class="pager__position">Page {{ page().page + 1 }} of {{ page().totalPages }}</span>
+        <button
+          type="button"
+          class="button button--secondary button--compact"
+          [disabled]="!page().hasNext || loading()"
+          (click)="load(page().page + 1)"
+        >
+          Next
+        </button>
+      </nav>
+    }
+  </section>
+}

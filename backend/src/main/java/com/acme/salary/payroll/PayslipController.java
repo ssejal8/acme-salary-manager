@@ -14,6 +14,10 @@ import java.util.Map;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -134,6 +138,40 @@ public class PayslipController {
                     how many payslips there are and whose.""")
     public PayslipDetailResponse get(@PathVariable Long id) {
         return payslips.findById(id);
+    }
+
+    @GetMapping(value = "/{id}/pdf", produces = MediaType.APPLICATION_PDF_VALUE)
+    @PreAuthorize("hasAnyRole('ADMIN', 'HR', 'EMPLOYEE')")
+    @Operation(
+            summary = "Download a payslip as PDF",
+            description = """
+                    The same document as `GET /payslips/{id}`, rendered for printing or
+                    emailing (FR-6.4).
+
+                    Authorised identically, because it *is* the same read: the ownership
+                    check runs once in the service and this endpoint reuses it rather than
+                    restating it. A payslip the caller may not have answers 404 here too.
+
+                    A draft is stamped DRAFT on the document itself — HR can download one
+                    while reviewing a run, and a page that did not say so could be handed
+                    to an employee as final.""")
+    public ResponseEntity<byte[]> downloadPdf(@PathVariable Long id) {
+        // The authorisation decision, the figures and the words are all the service's;
+        // this method only chooses a representation.
+        PayslipDetailResponse payslip = payslips.findById(id);
+        byte[] pdf = PayslipPdfRenderer.render(payslip);
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment()
+                                .filename(PayslipPdfRenderer.fileNameFor(payslip))
+                                .build()
+                                .toString())
+                // Explicit, because a browser that does not know the length cannot show
+                // progress on a download.
+                .contentLength(pdf.length)
+                .body(pdf);
     }
 
     private static Map<String, String> sortableProperties() {

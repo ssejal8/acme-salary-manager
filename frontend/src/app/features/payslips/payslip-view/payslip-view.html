@@ -11,6 +11,10 @@
   </p>
 }
 
+@if (downloadError(); as message) {
+  <p class="alert alert--error" role="alert">{{ message }}</p>
+}
+
 @if (payslip(); as slip) {
   <article class="card payslip">
     <header class="payslip__header">
@@ -18,6 +22,7 @@
         <p class="payslip__label">Payslip for</p>
         <h1 class="payslip__period">{{ slip | period }}</h1>
       </div>
+      <div class="payslip__status">
       @if (slip.published) {
         <span class="badge badge--active">Published</span>
       } @else {
@@ -28,6 +33,15 @@
         -->
         <span class="badge badge--inactive">Draft — not yet published</span>
       }
+        <button
+          type="button"
+          class="button button--secondary button--compact"
+          [disabled]="downloading()"
+          (click)="download()"
+        >
+          {{ downloading() ? 'Preparing…' : 'Download PDF' }}
+        </button>
+      </div>
     </header>
 
     <!-- Who it is for. FR-6.2: a payslip has to identify its subject. -->

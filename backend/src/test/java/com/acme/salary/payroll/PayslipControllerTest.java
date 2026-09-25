@@ -2,9 +2,13 @@ package com.acme.salary.payroll;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import com.acme.salary.common.error.NotFoundException;
@@ -15,6 +19,7 @@ import com.acme.salary.payroll.dto.PayslipLineResponse;
 import com.acme.salary.payroll.dto.PayslipRowResponse;
 import com.acme.salary.salarycomponent.ComponentType;
 import com.acme.salary.support.ApiSecurityTestConfig;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -29,6 +34,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithAnonymousUser;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -308,6 +314,51 @@ class PayslipControllerTest {
         @WithAnonymousUser
         void needsAToken() throws Exception {
             mockMvc.perform(get("/api/v1/payslips")).andExpect(status().isUnauthorized());
+        }
+    }
+
+    /** The PDF download (FR-6.4). */
+    @Nested
+    @DisplayName("GET /payslips/{id}/pdf")
+    class DownloadPdf {
+
+        @Test
+        @WithMockUser(roles = "EMPLOYEE")
+        void answersWithAPdfNamedAfterThePayslip() throws Exception {
+            when(payslips.findById(90L)).thenReturn(payslip());
+
+            byte[] body = mockMvc.perform(get("/api/v1/payslips/90/pdf"))
+                    .andExpect(status().isOk())
+                    .andExpect(content().contentType(MediaType.APPLICATION_PDF))
+                    .andExpect(header().string("Content-Disposition",
+                            "attachment; filename=\"payslip-E-1001-2026-04.pdf\""))
+                    .andReturn().getResponse().getContentAsByteArray();
+
+            // A real document, not an empty body with the right headers.
+            assertThat(new String(body, 0, 5, StandardCharsets.ISO_8859_1)).isEqualTo("%PDF-");
+            assertThat(body.length).isGreaterThan(500);
+        }
+
+        @Test
+        @WithMockUser(roles = "EMPLOYEE")
+        void reusesTheOwnershipCheckRatherThanRestatingIt() throws Exception {
+            // The same service call as the JSON read, so the 404-not-403 rule holds here
+            // too: a payslip the caller may not have must not be confirmed to exist.
+            when(payslips.findById(91L)).thenThrow(NotFoundException.of("Payslip", 91L));
+
+            mockMvc.perform(get("/api/v1/payslips/91/pdf"))
+                    .andExpect(status().isNotFound());
+
+            verify(payslips).findById(91L);
+        }
+
+        @Test
+        @WithAnonymousUser
+        void needsAToken() throws Exception {
+            mockMvc.perform(get("/api/v1/payslips/90/pdf"))
+                    .andExpect(status().isUnauthorized());
+
+            verify(payslips, never()).findById(any());
         }
     }
 }

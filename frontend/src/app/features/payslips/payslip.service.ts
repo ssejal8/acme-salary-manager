@@ -43,6 +43,18 @@ export class PayslipService {
   }
 
   /**
+   * One payslip as a PDF (FR-6.4).
+   *
+   * Fetched as a blob rather than linked to, because the request needs the bearer token
+   * an interceptor adds and a link navigation carries no headers. Authorised identically
+   * to {@link get} — it is the same read, rendered differently — so a payslip the caller
+   * may not have answers 404 here too.
+   */
+  downloadPdf(id: number): Observable<Blob> {
+    return this.http.get(`${this.baseUrl}/${id}/pdf`, { responseType: 'blob' });
+  }
+
+  /**
    * A paged payslip search (FR-6.5), which is the payroll register when a period is given
    * (FR-7.1).
    *

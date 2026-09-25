@@ -7,6 +7,7 @@ import { PeriodPipe } from '../../../shared/dates';
 import { MoneyPipe } from '../../../shared/money.pipe';
 import { Payslip } from '../payslip.models';
 import { PayslipService } from '../payslip.service';
+import { saveBlob } from '../../../shared/download';
 
 /**
  * One payslip, as a document (FR-6.2).
@@ -71,4 +72,40 @@ export class PayslipView {
     ),
     { initialValue: null as Payslip | null },
   );
+
+  readonly downloading = signal(false);
+  readonly downloadError = signal<string | null>(null);
+
+  /**
+   * Downloads this payslip as a PDF (FR-6.4).
+   *
+   * Fetched rather than linked: the request needs the bearer token an interceptor adds,
+   * and a link navigation carries no headers, so a plain download link would 401. The
+   * filename is built here to match the one the server suggests — the blob has no name of
+   * its own once it is in the browser.
+   */
+  download(): void {
+    const slip = this.payslip();
+    if (!slip || this.downloading()) {
+      return;
+    }
+
+    this.downloading.set(true);
+    this.downloadError.set(null);
+
+    this.payslips.downloadPdf(slip.id).subscribe({
+      next: (blob) => {
+        saveBlob(blob, `payslip-${slip.employee.employeeCode}-${slip.period}.pdf`);
+        this.downloading.set(false);
+      },
+      error: (failure: unknown) => {
+        this.downloading.set(false);
+        // A blob response carries no error envelope, so the interceptor's status-based
+        // fallback is what speaks here.
+        this.downloadError.set(
+          failure instanceof ApiFailure ? failure.message : 'The PDF could not be downloaded.',
+        );
+      },
+    });
+  }
 }

@@ -1,0 +1,166 @@
+.page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.page-header__title {
+  font-size: 1.375rem;
+  font-weight: 700;
+}
+
+.page-header__meta {
+  margin: var(--space-1) 0 0;
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}
+
+.filters,
+.register {
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+/* auto-fit: one column at 360px, four across when there is room (NFR-4.1). */
+.filters__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--space-3);
+}
+
+.filters__actions {
+  justify-content: flex-end;
+}
+
+.filters__note {
+  margin: var(--space-3) 0 0;
+  max-width: 44rem;
+  color: var(--colour-text-muted);
+  font-size: 0.8125rem;
+}
+
+.filters__clear {
+  color: inherit;
+  font-weight: 600;
+}
+
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.payslips {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+}
+
+.payslips th,
+.payslips td {
+  padding: var(--space-3);
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--colour-border);
+}
+
+.payslips thead th {
+  padding: 0;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--colour-text-muted);
+}
+
+/* Sortable headers are buttons, so they are reachable and operable by keyboard. */
+.payslips__sort {
+  width: 100%;
+  padding: var(--space-3);
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+
+.payslips__sort:hover {
+  color: var(--colour-accent);
+}
+
+/* The arrow follows aria-sort, so the visual cue and the announced one cannot disagree. */
+.payslips th[aria-sort='ascending'] .payslips__sort::after {
+  content: ' ▲';
+}
+
+.payslips th[aria-sort='descending'] .payslips__sort::after {
+  content: ' ▼';
+}
+
+.payslips thead th:not([aria-sort]) {
+  padding: var(--space-3);
+}
+
+.payslips tbody tr:last-child th,
+.payslips tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.payslips__amount {
+  text-align: right;
+}
+
+.payslips__period,
+.payslips__employee {
+  font-weight: 600;
+}
+
+.payslips__code {
+  display: block;
+  color: var(--colour-text-muted);
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
+.payslips__department {
+  color: var(--colour-text-muted);
+}
+
+.payslips__net {
+  font-weight: 700;
+}
+
+.payslips__actions {
+  text-align: right;
+}
+
+.payslips__link {
+  color: var(--colour-accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.payslips__link:hover {
+  text-decoration: underline;
+}
+
+.pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--colour-border);
+}
+
+.pager__position {
+  color: var(--colour-text-muted);
+  font-size: 0.875rem;
+}

@@ -154,11 +154,15 @@ describe('EmployeeDetail', () => {
     });
   });
 
-  it('still says plainly which parts are missing', async () => {
-    // Payslips remain unbuilt. An unexplained gap on this screen looks like a fault.
-    await createComponent();
+  it("links to this employee's payslips", async () => {
+    // FR-6.5 filters payslips by employee, and this is how that filter is reached —
+    // rather than giving the register an employee picker of its own.
+    await createComponent('1001');
 
-    expect(text()).toContain('Payslips are not part of this screen yet');
+    const link = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('a'),
+    ).find((anchor) => anchor.textContent?.trim() === 'Payslips');
+    expect(link?.getAttribute('href')).toBe('/payslips/all?employeeId=1001');
   });
 
   it('refetches when the route moves to another employee', async () => {

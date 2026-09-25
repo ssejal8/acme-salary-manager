@@ -95,6 +95,22 @@ export const routes: Routes = [
           import('./features/payslips/my-payslips/my-payslips').then((m) => m.MyPayslips),
       },
       {
+        // Before `payslips/:id`: routes match in order, so declared after it this would
+        // resolve as the payslip view for a payslip called "all".
+        //
+        // ADMIN/HR only. Every other role reaches their own payslips through `/payslips`,
+        // and the API narrows this query to the caller's own rows regardless — the guard
+        // exists so an employee is not offered a screen of filters that can only ever
+        // show them what they already have.
+        path: 'payslips/all',
+        title: 'All payslips · ACME Salary Management',
+        canActivate: [roleGuard('ADMIN', 'HR')],
+        loadComponent: () =>
+          import('./features/payslips/payslip-register/payslip-register').then(
+            (m) => m.PayslipRegister,
+          ),
+      },
+      {
         path: 'payslips/:id',
         title: 'Payslip · ACME Salary Management',
         loadComponent: () =>

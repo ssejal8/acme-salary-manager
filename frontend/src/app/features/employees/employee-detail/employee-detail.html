@@ -32,6 +32,17 @@
           >
             Edit
           </a>
+          <!--
+            FR-6.5 filters payslips by employee; this is how that filter is reached,
+            rather than giving the register an employee picker of its own.
+          -->
+          <a
+            class="button button--secondary button--compact"
+            routerLink="/payslips/all"
+            [queryParams]="{ employeeId: record.id }"
+          >
+            Payslips
+          </a>
           @if (record.status === 'ACTIVE') {
             <button
               type="button"
@@ -142,8 +153,6 @@
   -->
   <app-salary-history [employeeId]="record.id" [canAssign]="record.status === 'ACTIVE'" />
 
-  <!-- Still missing, and said plainly rather than left as an unexplained gap. -->
-  <p class="detail__note">Payslips are not part of this screen yet.</p>
 } @else if (loaded() && !errorMessage()) {
   <p class="alert alert--error" role="alert">This employee could not be found.</p>
 }

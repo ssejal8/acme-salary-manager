@@ -23,6 +23,7 @@
         <maven.compiler.release>17</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <springdoc.version>2.9.1</springdoc.version>
+        <pdfbox.version>3.0.5</pdfbox.version>
         <jjwt.version>0.12.6</jjwt.version>
     </properties>
 
@@ -65,6 +66,18 @@
              HMAC-signed, so there is no authorisation server to integrate with and no
              JWKS to fetch. api is compile-scope; impl and jackson are runtime-only by
              the library's own design. -->
+        <!--
+            PDF generation for payslips (FR-6.4). Apache PDFBox rather than an
+            iText-derived library: Apache-2.0 is unambiguous for a commercial deployment,
+            where iText 5 and its forks are AGPL or dual-licensed. It is also a drawing
+            API rather than an HTML converter, which suits a fixed one-page document and
+            avoids pulling a browser engine into the build.
+        -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>${pdfbox.version}</version>
+        </dependency>
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
             <artifactId>jjwt-api</artifactId>

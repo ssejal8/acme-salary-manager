@@ -57,6 +57,14 @@ export class Shell {
       available: this.auth.canManageEmployees(),
     },
     {
+      // FR-6.5: the HR-facing list across every employee, which with a period chosen is
+      // the payroll register (FR-7.1). Distinct from "My payslips" above, which is
+      // everybody's own.
+      path: '/payslips/all',
+      label: 'All payslips',
+      available: this.auth.canManageEmployees(),
+    },
+    {
       path: '/reports/compensation',
       label: 'Compensation',
       available: this.auth.canManageEmployees(),

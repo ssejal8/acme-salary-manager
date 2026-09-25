@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Maven settings for this repository, resolving from Maven Central.
+
+  Why this file exists, and why it is committed: a developer's `~/.m2/settings.xml` often
+  declares a corporate mirror with `<mirrorOf>external:*</mirrorOf>`, which silently routes
+  every dependency of every project through an internal Artifactory. For a project whose
+  dependencies are all public, that makes the build depend on a network nobody else can
+  reach, and on credentials that must never be committed.
+
+  `.mvn/maven.config` passes `-s .mvn/settings.xml`, so `./mvnw` picks this up
+  automatically — nobody has to remember a flag, and nobody has to edit the machine
+  configuration their other work depends on. The local repository is deliberately left at
+  its default, so anything already cached is reused.
+
+  If you genuinely need a mirror — an air-gapped build, or a corporate proxy that is the
+  only route out — delete `.mvn/maven.config` rather than editing this file, so the
+  deviation is visible in the diff.
+-->
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
+                              https://maven.apache.org/xsd/settings-1.0.0.xsd">
+
+  <!--
+    No <mirrors> block at all. Maven's built-in `central` repository is then used as
+    declared by the Spring Boot parent, which is the whole point of this file.
+  -->
+
+  <profiles>
+    <profile>
+      <id>public-central</id>
+      <repositories>
+        <repository>
+          <id>central</id>
+          <url>https://repo.maven.apache.org/maven2</url>
+          <releases>
+            <enabled>true</enabled>
+          </releases>
+          <snapshots>
+            <enabled>false</enabled>
+          </snapshots>
+        </repository>
+      </repositories>
+      <pluginRepositories>
+        <pluginRepository>
+          <id>central</id>
+          <url>https://repo.maven.apache.org/maven2</url>
+          <releases>
+            <enabled>true</enabled>
+          </releases>
+          <snapshots>
+            <enabled>false</enabled>
+          </snapshots>
+        </pluginRepository>
+      </pluginRepositories>
+    </profile>
+  </profiles>
+
+  <activeProfiles>
+    <activeProfile>public-central</activeProfile>
+  </activeProfiles>
+</settings>
