@@ -1,8 +1,9 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { Payslip } from './payslip.models';
+import { PageResponse } from '../../shared/page-response';
+import { Payslip, PayslipQuery, PayslipRow } from './payslip.models';
 
 /**
  * Payslips (FR-6.1, FR-6.2).
@@ -40,4 +41,48 @@ export class PayslipService {
   get(id: number): Observable<Payslip> {
     return this.http.get<Payslip>(`${this.baseUrl}/${id}`);
   }
+
+  /**
+   * A paged payslip search (FR-6.5), which is the payroll register when a period is given
+   * (FR-7.1).
+   *
+   * Thin for the same reason as the calls above: what the caller may see is decided by the
+   * server from their role and applied in the query, so an EMPLOYEE asking for somebody
+   * else's payslips gets their own rather than a refusal. There is nothing for this
+   * service to filter.
+   */
+  search(query: PayslipQuery = {}): Observable<PageResponse<PayslipRow>> {
+    return this.http.get<PageResponse<PayslipRow>>(this.baseUrl, {
+      params: toSearchParams(query),
+    });
+  }
+}
+
+/**
+ * Builds the query string, omitting anything absent.
+ *
+ * An empty parameter is not the same as no parameter: `?departmentId=` is a bind failure
+ * on a `Long`, not "every department".
+ */
+export function toSearchParams(query: PayslipQuery): HttpParams {
+  let params = new HttpParams();
+  const numbers: [keyof PayslipQuery, number | undefined][] = [
+    ['runId', query.runId],
+    ['periodYear', query.periodYear],
+    ['periodMonth', query.periodMonth],
+    ['departmentId', query.departmentId],
+    ['employeeId', query.employeeId],
+    ['page', query.page],
+    ['size', query.size],
+  ];
+  for (const [name, value] of numbers) {
+    if (value !== undefined) {
+      params = params.set(name, value);
+    }
+  }
+  if (query.sort) {
+    // The API takes Spring's `property,direction` form.
+    params = params.set('sort', `${query.sort},${query.direction ?? 'asc'}`);
+  }
+  return params;
 }

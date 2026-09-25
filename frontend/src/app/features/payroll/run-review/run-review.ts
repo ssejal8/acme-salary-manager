@@ -5,16 +5,17 @@ import { of, switchMap } from 'rxjs';
 import { ApiFailure } from '../../../core/http/api-error';
 import { PeriodPipe } from '../../../shared/dates';
 import { MoneyPipe } from '../../../shared/money.pipe';
+import { PageResponse, emptyPage, shownRange } from '../../../shared/page-response';
+import { PayslipRow } from '../../payslips/payslip.models';
 import { LopAdjustment, PayrollRunDetail } from '../payroll-run.models';
 import { PayrollRunService } from '../payroll-run.service';
 
 /**
- * Rows shown at once.
+ * Rows per page.
  *
- * The API returns every payslip in the run — at ten thousand employees that is the whole
- * payroll in one payload — so the table is paged in the browser to keep ten thousand rows
- * out of the DOM. That is a stopgap and is named as one: the real fix is a paged payslip
- * endpoint, which is recorded as outstanding work rather than pretended away here.
+ * Fetched a page at a time from `GET /payroll-runs/{id}/payslips`, so neither the DOM nor
+ * the response holds ten thousand payslips. The run detail endpoint still returns them all
+ * and is used only for the totals and the status — the figures a header needs.
  */
 const ROWS_PER_PAGE = 25;
 
@@ -101,6 +102,7 @@ export class RunReview {
           }
           this.apply(detail);
           this.loading.set(false);
+          this.showRowPage(0);
         },
         error: (failure: unknown) => {
           this.loadError.set(
@@ -132,37 +134,68 @@ export class RunReview {
   }
 
   readonly run = computed(() => this.detail()?.run ?? null);
+
+  /**
+   * Every payslip in the run, from the detail payload.
+   *
+   * Not what the table renders — that is {@link rows}, a page at a time — but what the
+   * loss-of-pay picture is built from. The recompute endpoint takes the complete set of
+   * adjustments (FR-5.6), so a screen that only knew one page would silently clear the
+   * unpaid days of everyone on the others.
+   */
   readonly payslips = computed(() => this.detail()?.payslips ?? []);
+
   readonly isDraft = computed(() => this.run()?.status === 'DRAFT');
 
-  readonly totalRowPages = computed(() =>
-    Math.max(1, Math.ceil(this.payslips().length / ROWS_PER_PAGE)),
-  );
+  /** The page of rows on screen, each carrying its employee's name. */
+  readonly rows = signal<PageResponse<PayslipRow>>(emptyPage(ROWS_PER_PAGE));
+  readonly rowsLoading = signal(false);
 
-  readonly visiblePayslips = computed(() => {
-    const start = this.rowsPage() * ROWS_PER_PAGE;
-    return this.payslips().slice(start, start + ROWS_PER_PAGE);
-  });
+  readonly totalRowPages = computed(() => Math.max(1, this.rows().totalPages));
 
   /** The 1-based row range shown, for the caption. */
   readonly shownRows = computed(() => {
-    const total = this.payslips().length;
-    if (total === 0) {
-      return { from: 0, to: 0, total };
-    }
-    const from = this.rowsPage() * ROWS_PER_PAGE + 1;
-    return { from, to: Math.min(from + ROWS_PER_PAGE - 1, total), total };
+    const page = this.rows();
+    const range = shownRange(page);
+    return { from: range.from, to: range.to, total: page.totalElements };
   });
 
+  /**
+   * Fetches a page of rows.
+   *
+   * The page number is held by the server's response rather than by a local signal, so
+   * the pager can never claim a page the response does not describe.
+   */
   showRowPage(page: number): void {
-    this.rowsPage.set(Math.max(0, Math.min(page, this.totalRowPages() - 1)));
+    const runId = Number(this.id());
+    if (!Number.isInteger(runId) || runId <= 0) {
+      return;
+    }
+    const requested = Math.max(0, page);
+    this.rowsLoading.set(true);
+    this.runs.payslips(runId, requested, ROWS_PER_PAGE).subscribe({
+      next: (rows) => {
+        this.rows.set(rows);
+        this.rowsPage.set(rows.page);
+        this.rowsLoading.set(false);
+      },
+      error: (failure: unknown) => {
+        this.rowsLoading.set(false);
+        this.actionFailure.set(failure instanceof ApiFailure ? failure : null);
+      },
+    });
   }
 
   lopFor(employeeId: number): number {
     return this.lopByEmployee().get(employeeId) ?? 0;
   }
 
-  /** Whether any edit differs from what the run currently holds. */
+  /**
+   * Whether any edit differs from what the run currently holds.
+   *
+   * Compared against the whole run rather than the page on screen, so an adjustment made
+   * on page four still counts as pending when page one is showing.
+   */
   readonly hasPendingEdits = computed(() => {
     const lop = this.lopByEmployee();
     return this.payslips().some(
@@ -210,6 +243,9 @@ export class RunReview {
       next: (detail) => {
         this.apply(detail);
         this.working.set(false);
+        // The figures on every row have moved, so the page on screen is refetched rather
+        // than left showing what was computed before the adjustment.
+        this.showRowPage(this.rowsPage());
         this.outcome.set('Recomputed with the loss-of-pay days below.');
       },
       error: (failure: unknown) => this.failed(failure),
@@ -241,6 +277,8 @@ export class RunReview {
         this.apply(detail);
         this.working.set(false);
         this.pendingAction.set(null);
+        // Refetched so the rows report their run as published rather than as a draft.
+        this.showRowPage(this.rowsPage());
         this.outcome.set('Finalised. These payslips are now visible to the employees on them.');
       },
       error: (failure: unknown) => this.failed(failure),
@@ -261,6 +299,7 @@ export class RunReview {
         this.apply(detail);
         this.working.set(false);
         this.pendingAction.set(null);
+        this.showRowPage(this.rowsPage());
         this.outcome.set('Cancelled. The period is free to be run again.');
       },
       error: (failure: unknown) => this.failed(failure),

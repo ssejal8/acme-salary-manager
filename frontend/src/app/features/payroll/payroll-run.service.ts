@@ -3,6 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { PageResponse } from '../../shared/page-response';
+import { PayslipRow } from '../payslips/payslip.models';
 import {
   PayrollRunDetail,
   PayrollRunSummary,
@@ -53,9 +54,28 @@ export class PayrollRunService {
     return this.http.get<PageResponse<PayrollRunSummary>>(this.baseUrl, { params });
   }
 
-  /** One run with every payslip in it — the review screen's payload (FR-5.6). */
+  /**
+   * One run with every payslip in it (FR-5.6).
+   *
+   * The review screen reads this for the run's totals and — the part that matters — the
+   * complete set of loss-of-pay days across the whole run. It cannot use a page for that:
+   * the recompute endpoint treats its adjustment list as the whole picture, so sending
+   * only what one page holds would clear everybody else's unpaid days.
+   */
   get(id: number): Observable<PayrollRunDetail> {
     return this.http.get<PayrollRunDetail>(`${this.baseUrl}/${id}`);
+  }
+
+  /**
+   * The payslips in one run, a page at a time, each row carrying its employee's name.
+   *
+   * What the review table renders. The rows come from here rather than from {@link get}
+   * for two reasons: ten thousand rows do not belong in the DOM, and a payslip inside a
+   * run identifies its employee by id alone — this endpoint resolves the name.
+   */
+  payslips(id: number, page = 0, size = 25): Observable<PageResponse<PayslipRow>> {
+    const params = new HttpParams().set('page', page).set('size', size);
+    return this.http.get<PageResponse<PayslipRow>>(`${this.baseUrl}/${id}/payslips`, { params });
   }
 
   /**

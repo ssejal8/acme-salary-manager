@@ -105,7 +105,18 @@
     the words of the thing that will happen rather than asking "are you sure?".
   -->
   @if (pendingAction() === 'finalise') {
-    <section class="card confirm confirm--publish" role="alertdialog" aria-labelledby="confirm-heading">
+    <!--
+      A labelled region with a live announcement rather than role="alertdialog": this
+      panel is inline, focus stays where the user left it and the rest of the page is
+      still reachable, so calling it a dialog would promise assistive technology a
+      modality that is not there.
+    -->
+    <section
+      class="card confirm confirm--publish"
+      role="group"
+      aria-live="polite"
+      aria-labelledby="confirm-heading"
+    >
       <h2 class="confirm__title" id="confirm-heading">Publish {{ run | period }}?</h2>
       <p class="confirm__body">
         {{ run.employeeCount }} payslips totalling {{ run.totalNet | money }} become visible
@@ -129,7 +140,7 @@
   }
 
   @if (pendingAction() === 'cancel') {
-    <section class="card confirm" role="alertdialog" aria-labelledby="cancel-heading">
+    <section class="card confirm" role="group" aria-live="polite" aria-labelledby="cancel-heading">
       <h2 class="confirm__title" id="cancel-heading">Abandon this draft?</h2>
       <p class="confirm__body">
         The {{ run | period }} draft is abandoned and the period becomes free to run again.
@@ -176,6 +187,7 @@
         <thead>
           <tr>
             <th scope="col">Employee</th>
+            <th scope="col">Department</th>
             <th scope="col" class="payslips__days">Paid days</th>
             <th scope="col" class="payslips__days">Unpaid days</th>
             <th scope="col" class="payslips__amount">Gross</th>
@@ -184,16 +196,22 @@
           </tr>
         </thead>
         <tbody>
-          @for (payslip of visiblePayslips(); track payslip.id) {
+          @for (payslip of rows().content; track payslip.id) {
             <tr>
-              <!--
-                By id, because that is all a run's payslip carries — it names its employee
-                by reference and leaves resolving the name to whoever needs it.
-              -->
-              <th scope="row" class="payslips__employee code">#{{ payslip.employeeId }}</th>
+              <th scope="row" class="payslips__employee">
+                {{ payslip.employeeName }}
+                <span class="payslips__code code">{{ payslip.employeeCode }}</span>
+              </th>
+              <td class="payslips__department">{{ payslip.department }}</td>
               <td class="numeric">{{ payslip.paidDays }} / {{ payslip.totalDays }}</td>
               <td class="payslips__days">
                 @if (isDraft()) {
+                  <!--
+                    aria-label rather than a neighbouring visually-hidden span: a sibling
+                    is not a label, so a screen reader would announce an unnamed spin box
+                    on every row — on the one control here that changes what people are
+                    paid.
+                  -->
                   <input
                     class="input payslips__lop numeric"
                     type="number"
@@ -202,11 +220,9 @@
                     [max]="payslip.totalDays"
                     [value]="lopFor(payslip.employeeId)"
                     [disabled]="working()"
+                    [attr.aria-label]="'Unpaid days for ' + payslip.employeeName"
                     (input)="setLop(payslip.employeeId, $any($event.target).value, payslip.totalDays)"
                   />
-                  <span class="visually-hidden">
-                    Unpaid days for employee {{ payslip.employeeId }}
-                  </span>
                 } @else {
                   <span class="numeric">{{ payslip.lopDays }}</span>
                 }
@@ -214,6 +230,16 @@
               <td class="numeric">{{ payslip.grossPay | money }}</td>
               <td class="numeric">{{ payslip.totalDeductions | money }}</td>
               <td class="numeric payslips__net">{{ payslip.netPay | money }}</td>
+            </tr>
+          } @empty {
+            <tr>
+              <td class="payslips__none" colspan="7">
+                @if (rowsLoading()) {
+                  Loading…
+                } @else {
+                  This run has no payslips.
+                }
+              </td>
             </tr>
           }
         </tbody>
@@ -225,29 +251,23 @@
         <button
           type="button"
           class="button button--secondary button--compact"
-          [disabled]="rowsPage() === 0"
-          (click)="showRowPage(rowsPage() - 1)"
+          [disabled]="!rows().hasPrevious || rowsLoading()"
+          (click)="showRowPage(rows().page - 1)"
         >
           Previous
         </button>
         <span class="pager__position">
-          Page {{ rowsPage() + 1 }} of {{ totalRowPages() }}
+          Page {{ rows().page + 1 }} of {{ totalRowPages() }}
         </span>
         <button
           type="button"
           class="button button--secondary button--compact"
-          [disabled]="rowsPage() + 1 >= totalRowPages()"
-          (click)="showRowPage(rowsPage() + 1)"
+          [disabled]="!rows().hasNext || rowsLoading()"
+          (click)="showRowPage(rows().page + 1)"
         >
           Next
         </button>
       </nav>
-
-      <!-- Named rather than hidden: the payload is still the whole run. -->
-      <p class="payslips-card__caveat">
-        These pages are split in the browser — the API returns the whole run in one
-        response, so a paged payslip endpoint is still outstanding work.
-      </p>
     }
   </section>
 } @else if (!loading() && !loadError()) {

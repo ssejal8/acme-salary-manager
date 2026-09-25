@@ -211,6 +211,24 @@
   font-weight: 600;
 }
 
+/* The code beneath the name: identification, without competing with it. */
+.payslips__code {
+  display: block;
+  color: var(--colour-text-muted);
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
+.payslips__department {
+  color: var(--colour-text-muted);
+}
+
+.payslips__none {
+  padding: var(--space-5);
+  text-align: center;
+  color: var(--colour-text-muted);
+}
+
 .payslips__net {
   font-weight: 700;
 }

@@ -2,6 +2,8 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { Observable, of, throwError } from 'rxjs';
 import { ApiFailure } from '../../../core/http/api-error';
+import { PageResponse } from '../../../shared/page-response';
+import { PayslipRow } from '../../payslips/payslip.models';
 import {
   PayrollRunDetail,
   PayrollRunStatus,
@@ -49,11 +51,50 @@ function detail(
   };
 }
 
-/** Thirty rows, so the browser-side paging of the table has something to page. */
 function manyPayslips(count: number): RunPayslip[] {
   return Array.from({ length: count }, (_, index) =>
     payslip({ id: index + 1, employeeId: 2000 + index }),
   );
+}
+
+/**
+ * The paged rows endpoint, standing in for the server: it slices the run's payslips and
+ * decorates each with the employee identity the API resolves.
+ */
+function rowsPageFor(
+  payslips: RunPayslip[],
+  page: number,
+  size: number,
+): PageResponse<PayslipRow> {
+  const start = page * size;
+  const slice = payslips.slice(start, start + size);
+  return {
+    content: slice.map((source) => ({
+      id: source.id,
+      runId: 7,
+      periodYear: 2026,
+      periodMonth: 8,
+      period: '2026-08',
+      runStatus: 'DRAFT' as PayrollRunStatus,
+      published: false,
+      employeeId: source.employeeId,
+      employeeCode: `E-${source.employeeId}`,
+      employeeName: `Employee ${source.employeeId}`,
+      department: 'Engineering',
+      totalDays: source.totalDays,
+      paidDays: source.paidDays,
+      lopDays: source.lopDays,
+      grossPay: source.grossPay,
+      totalDeductions: source.totalDeductions,
+      netPay: source.netPay,
+    })),
+    page,
+    size,
+    totalElements: payslips.length,
+    totalPages: Math.max(1, Math.ceil(payslips.length / size)),
+    hasNext: start + size < payslips.length,
+    hasPrevious: page > 0,
+  };
 }
 
 describe('RunReview', () => {
@@ -61,6 +102,7 @@ describe('RunReview', () => {
   let component: RunReview;
 
   let getIds: number[];
+  let rowRequests: { id: number; page: number; size: number }[];
   let recomputeCalls: { id: number; request: RecomputePayrollRunRequest }[];
   let finaliseCalls: number[];
   let cancelCalls: number[];
@@ -72,6 +114,7 @@ describe('RunReview', () => {
 
   beforeEach(() => {
     getIds = [];
+    rowRequests = [];
     recomputeCalls = [];
     finaliseCalls = [];
     cancelCalls = [];
@@ -96,6 +139,13 @@ describe('RunReview', () => {
             get: (id: number) => {
               getIds.push(id);
               return getResult();
+            },
+            payslips: (id: number, page: number, size: number) => {
+              rowRequests.push({ id, page, size });
+              // Whatever the run currently holds, paged the way the API would page it.
+              let current: RunPayslip[] = [];
+              getResult().subscribe((detail) => (current = detail.payslips));
+              return of(rowsPageFor(current, page, size));
             },
             recompute: (id: number, request: RecomputePayrollRunRequest) => {
               recomputeCalls.push({ id, request });
@@ -160,12 +210,21 @@ describe('RunReview', () => {
       expect(text()).toContain('never recomputed at finalisation');
     });
 
-    it('lists a row per payslip', async () => {
+    it('lists a row per payslip, naming the employee', async () => {
+      // The name a payslip cannot supply for itself: the paged endpoint resolves it, so
+      // the table is no longer a column of bare ids.
       await createComponent();
 
       expect(rows()).toHaveLength(2);
-      expect(text()).toContain('#1001');
-      expect(text()).toContain('#1002');
+      expect(text()).toContain('Employee 1001');
+      expect(text()).toContain('E-1001');
+      expect(text()).toContain('Engineering');
+    });
+
+    it('asks the server for the first page of rows, not the whole run', async () => {
+      await createComponent('7');
+
+      expect(rowRequests).toEqual([{ id: 7, page: 0, size: 25 }]);
     });
 
     it('rejects a route id that is not a valid reference, without requesting it', async () => {
@@ -264,6 +323,8 @@ describe('RunReview', () => {
       expect(component.lopFor(1001)).toBe(3);
       expect(component.hasPendingEdits()).toBe(false);
       expect(text()).toContain('Recomputed');
+      // The figures on screen moved with it, rather than showing the pre-adjustment page.
+      expect(rowRequests.length).toBeGreaterThan(1);
     });
 
     it('shows the field error naming the employee the server objected to', async () => {
@@ -310,6 +371,7 @@ describe('RunReview', () => {
       expect(finaliseCalls).toEqual([7]);
       expect(text()).toContain('FINALISED');
       expect(text()).toContain('visible to the employees');
+      expect(rowRequests.length).toBeGreaterThan(1);
     });
 
     it('can be backed out of', async () => {
@@ -406,51 +468,93 @@ describe('RunReview', () => {
   });
 
   describe('the payslip table at scale', () => {
-    it('keeps a thousand rows out of the DOM by paging in the browser', async () => {
-      // A stopgap until the API pages payslips, and the screen says so rather than
-      // pretending the payload is small.
+    it('renders one page of rows, however many the run holds', async () => {
+      // Ten thousand rows belong in neither the DOM nor the response, so the table reads
+      // a page at a time from GET /payroll-runs/{id}/payslips.
       getResult = () => of(detail('DRAFT', manyPayslips(60)));
       await createComponent();
 
       expect(rows()).toHaveLength(25);
       expect(component.totalRowPages()).toBe(3);
       expect(text()).toContain('Showing 1–25 of 60');
-      expect(text()).toContain('paged payslip endpoint is still outstanding');
     });
 
-    it('moves through the pages', async () => {
+    it('fetches the next page from the server rather than slicing one it already has', async () => {
       getResult = () => of(detail('DRAFT', manyPayslips(60)));
       await createComponent();
 
       component.showRowPage(2);
       await settle();
 
+      expect(rowRequests).toEqual([
+        { id: 7, page: 0, size: 25 },
+        { id: 7, page: 2, size: 25 },
+      ]);
       expect(text()).toContain('Showing 51–60 of 60');
       expect(rows()).toHaveLength(10);
     });
 
-    it('will not page past either end', async () => {
-      getResult = () => of(detail('DRAFT', manyPayslips(60)));
-      await createComponent();
-
-      component.showRowPage(99);
-      expect(component.rowsPage()).toBe(2);
-
-      component.showRowPage(-5);
-      expect(component.rowsPage()).toBe(0);
-    });
-
-    it('keeps an edit made on a later page', async () => {
+    it('takes its page number from the response, not from the click', async () => {
+      // So the pager can never claim a page the server did not return.
       getResult = () => of(detail('DRAFT', manyPayslips(60)));
       await createComponent();
 
       component.showRowPage(1);
+      await settle();
+
+      expect(component.rowsPage()).toBe(1);
+      expect(component.rows().page).toBe(1);
+    });
+
+    it('will not ask for a negative page', async () => {
+      getResult = () => of(detail('DRAFT', manyPayslips(60)));
+      await createComponent();
+
+      component.showRowPage(-5);
+      await settle();
+
+      expect(rowRequests.map((request) => request.page)).toEqual([0, 0]);
+    });
+
+    it('keeps an edit made on a page that is no longer showing', async () => {
+      // The adjustment list is the whole picture (FR-5.6), so an edit on page two must
+      // still be sent when page one is on screen — otherwise recomputing from a partial
+      // view would clear everybody else's unpaid days.
+      getResult = () => of(detail('DRAFT', manyPayslips(60)));
+      await createComponent();
+
+      component.showRowPage(1);
+      await settle();
       component.setLop(2030, '2', 31);
       component.showRowPage(0);
       await settle();
 
       expect(component.lopFor(2030)).toBe(2);
       expect(component.hasPendingEdits()).toBe(true);
+
+      component.recompute();
+      await settle();
+
+      expect(recomputeCalls[0].request.adjustments).toEqual([{ employeeId: 2030, lopDays: 2 }]);
+    });
+
+    it('builds the adjustment list from the whole run, not from the visible page', async () => {
+      getResult = () =>
+        of(
+          detail('DRAFT', [
+            payslip({ id: 1, employeeId: 3001, lopDays: 4, paidDays: 27 }),
+            ...manyPayslips(40),
+          ]),
+        );
+      await createComponent();
+
+      // Page two is showing; the employee with unpaid days is on page one.
+      component.showRowPage(1);
+      await settle();
+      component.recompute();
+      await settle();
+
+      expect(recomputeCalls[0].request.adjustments).toEqual([{ employeeId: 3001, lopDays: 4 }]);
     });
   });
 });
