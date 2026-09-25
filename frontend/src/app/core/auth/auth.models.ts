@@ -52,3 +52,14 @@ export interface StoredSession {
   /** Epoch milliseconds, by the browser's clock. */
   expiresAt: number;
 }
+
+/**
+ * Request body of `POST /auth/change-password` (FR-1.6).
+ *
+ * There is no user id: the account changed is always the authenticated caller's, so there
+ * is nothing in the request that could aim it at somebody else.
+ */
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+}

@@ -148,6 +148,14 @@ export const routes: Routes = [
           ),
       },
       {
+        // Every authenticated role: changing your own password is not a privilege, and the
+        // endpoint behind it takes no user id, so there is nothing here to restrict.
+        path: 'change-password',
+        title: 'Change password · ACME Salary Management',
+        loadComponent: () =>
+          import('./features/auth/change-password/change-password').then((m) => m.ChangePassword),
+      },
+      {
         path: 'not-authorised',
         title: 'No access · ACME Salary Management',
         loadComponent: () =>

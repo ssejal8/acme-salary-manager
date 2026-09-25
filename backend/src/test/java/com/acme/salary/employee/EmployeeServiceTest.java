@@ -25,9 +25,12 @@ import com.acme.salary.employee.dto.UpdateEmployeeRequest;
 import com.acme.salary.orgdata.DepartmentRepository;
 import com.acme.salary.orgdata.DesignationRepository;
 import com.acme.salary.orgdata.GradeRepository;
+import com.acme.salary.security.UserAccountService;
+import com.acme.salary.security.UserAccountService.ProvisionedLogin;
 import com.acme.salary.support.EmployeeFixtures;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -62,6 +65,9 @@ class EmployeeServiceTest {
     private GradeRepository grades;
 
     @Mock
+    private UserAccountService accounts;
+
+    @Mock
     private AuditService audit;
 
     @InjectMocks
@@ -69,6 +75,9 @@ class EmployeeServiceTest {
 
     @Captor
     private ArgumentCaptor<Pageable> pageableCaptor;
+
+    @Captor
+    private ArgumentCaptor<Map<String, Object>> detailsCaptor;
 
     /** Typed matcher, so the tests stay free of raw-type warnings. */
     private static Specification<Employee> anySpecification() {
@@ -169,6 +178,11 @@ class EmployeeServiceTest {
                     LocalDate.of(2026, 4, 1), 10L, 20L, 30L);
         }
 
+        private void loginIsProvisioned() {
+            when(accounts.provisionLoginFor(any()))
+                    .thenReturn(new ProvisionedLogin(500L, "generated-password"));
+        }
+
         private void referencesExist() {
             when(departments.findById(10L))
                     .thenReturn(Optional.of(EmployeeFixtures.department(10L, "ENG", "Engineering")));
@@ -180,6 +194,7 @@ class EmployeeServiceTest {
         @Test
         void savesAnActiveEmployeeWithTheGivenDetails() {
             referencesExist();
+            loginIsProvisioned();
             when(employees.save(any(Employee.class)))
                     .thenAnswer(call -> EmployeeFixtures.withId(call.getArgument(0), 7L));
 
@@ -194,6 +209,7 @@ class EmployeeServiceTest {
 
         @Test
         void normalisesTheCodeAndEmailBeforeCheckingForDuplicates() {
+            loginIsProvisioned();
             // The bug this guards: a pre-check against the raw input lets "e-050" past a
             // lookup for "E-050", and the duplicate then surfaces as a database error
             // instead of a field-level 409.
@@ -237,6 +253,49 @@ class EmployeeServiceTest {
         }
 
         @Test
+        void provisionsALoginForTheWorkEmailAndLinksIt() {
+            // FR-2.7: the work email is the username, so the login is created with the
+            // record rather than left as a chore somebody has to remember.
+            referencesExist();
+            loginIsProvisioned();
+            when(employees.save(any(Employee.class)))
+                    .thenAnswer(call -> EmployeeFixtures.withId(call.getArgument(0), 7L));
+
+            EmployeeSummaryResponse created = service.create(request());
+
+            verify(accounts).provisionLoginFor("asha.menon@acme.test");
+            assertThat(created.temporaryPassword()).isEqualTo("generated-password");
+        }
+
+        @Test
+        void carriesNoPasswordWhenAnExistingLoginWasLinked() {
+            // The HR operator who is also on the payroll already has an account, so there
+            // is no new credential to hand over.
+            referencesExist();
+            when(accounts.provisionLoginFor(any())).thenReturn(new ProvisionedLogin(2L, null));
+            when(employees.save(any(Employee.class)))
+                    .thenAnswer(call -> EmployeeFixtures.withId(call.getArgument(0), 7L));
+
+            assertThat(service.create(request()).temporaryPassword()).isNull();
+        }
+
+        @Test
+        void neverPutsThePasswordInTheAuditTrail() {
+            // FR-1.2: nothing about a credential belongs in an audit row.
+            referencesExist();
+            loginIsProvisioned();
+            when(employees.save(any(Employee.class)))
+                    .thenAnswer(call -> EmployeeFixtures.withId(call.getArgument(0), 7L));
+
+            service.create(request());
+
+            verify(audit).record(eq(AuditEntityType.EMPLOYEE), eq(7L),
+                    eq(AuditAction.EMPLOYEE_CREATED), detailsCaptor.capture());
+            assertThat(detailsCaptor.getValue().values()).doesNotContain("generated-password");
+            assertThat(detailsCaptor.getValue()).containsEntry("userId", 500L);
+        }
+
+        @Test
         void anUnknownDepartmentIsAValidationErrorNamingThatField() {
             when(departments.findById(10L)).thenReturn(Optional.empty());
 
@@ -250,6 +309,7 @@ class EmployeeServiceTest {
         @Test
         void recordsWhoCreatedTheRecord() {
             referencesExist();
+            loginIsProvisioned();
             when(employees.save(any(Employee.class)))
                     .thenAnswer(call -> EmployeeFixtures.withId(call.getArgument(0), 7L));
 
@@ -336,11 +396,47 @@ class EmployeeServiceTest {
         }
 
         @Test
+        void movesTheLoginToTheNewAddressToo() {
+            // Otherwise this person keeps signing in with an address their record no
+            // longer shows: the work email is the username (FR-2.7).
+            Employee existing = EmployeeFixtures.employee(1L, "E-001", "Asha", "Menon");
+            existing.linkUser(500L);
+            when(employees.findWithReferencesById(1L)).thenReturn(Optional.of(existing));
+            referencesResolve();
+
+            service.update(1L, request);
+
+            verify(accounts).changeLoginEmail(500L, "asha.rao@acme.test");
+        }
+
+        @Test
+        void leavesAccountsAloneForAnEmployeeWithNoLogin() {
+            // Most seeded records have none, and provisioning one here would be a
+            // different operation than the caller asked for.
+            Employee existing = EmployeeFixtures.employee(1L, "E-001", "Asha", "Menon");
+            when(employees.findWithReferencesById(1L)).thenReturn(Optional.of(existing));
+            referencesResolve();
+
+            service.update(1L, request);
+
+            verify(accounts, never()).changeLoginEmail(any(), any());
+            verify(accounts, never()).provisionLoginFor(any());
+        }
+
+        @Test
         void anUnknownEmployeeIsANotFound() {
             when(employees.findWithReferencesById(99L)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.update(99L, request))
                     .isInstanceOf(NotFoundException.class);
+        }
+
+        private void referencesResolve() {
+            when(departments.findById(10L))
+                    .thenReturn(Optional.of(EmployeeFixtures.department(10L, "ENG", "Engineering")));
+            when(designations.findById(20L))
+                    .thenReturn(Optional.of(EmployeeFixtures.designation(20L, "Software Engineer")));
+            when(grades.findById(30L)).thenReturn(Optional.of(EmployeeFixtures.grade(30L, "G2")));
         }
     }
 

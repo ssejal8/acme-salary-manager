@@ -3,7 +3,14 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { Observable, tap } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { AuthenticatedUser, LoginRequest, Role, StoredSession, TokenResponse } from './auth.models';
+import {
+  AuthenticatedUser,
+  ChangePasswordRequest,
+  LoginRequest,
+  Role,
+  StoredSession,
+  TokenResponse,
+} from './auth.models';
 import { TokenStorage } from './token-storage';
 
 /**
@@ -57,21 +64,39 @@ export class AuthService {
   }
 
   /**
+   * Changes the caller's own password (FR-1.6).
+   *
+   * Answers 204 and carries nothing back. The caller is expected to sign out afterwards,
+   * and not as a courtesy: changing a password moves the user's `tokenVersion`, so the
+   * token this request was made with is already dead (ADR-004) and the next request with
+   * it would 401.
+   */
+  changePassword(request: ChangePasswordRequest): Observable<void> {
+    return this.http.post<void>(`${environment.apiBaseUrl}/auth/change-password`, request);
+  }
+
+  /**
    * Discards the session and returns to the login screen.
    *
    * There is no server call, because there is nothing for a server to do: the tokens are
    * stateless and cannot be revoked (ADR-004). A logout endpoint would report success
    * while the token it "revoked" kept working, so the honest implementation is local.
    *
-   * @param expired when true, the login screen explains that the session timed out rather
-   *     than appearing for no reason
+   * @param options why the session ended, so the login screen can say so rather than
+   *     appearing for no reason: `expired` for a token that timed out, `passwordChanged`
+   *     for the one action that deliberately invalidates every outstanding token
    */
-  logout(options: { expired?: boolean } = {}): void {
+  logout(options: { expired?: boolean; passwordChanged?: boolean } = {}): void {
     this.session.set(null);
     this.storage.clear();
-    void this.router.navigate(['/login'], {
-      queryParams: options.expired ? { expired: 'true' } : {},
-    });
+    const queryParams: Record<string, string> = {};
+    if (options.expired) {
+      queryParams['expired'] = 'true';
+    }
+    if (options.passwordChanged) {
+      queryParams['passwordChanged'] = 'true';
+    }
+    void this.router.navigate(['/login'], { queryParams });
   }
 
   /**

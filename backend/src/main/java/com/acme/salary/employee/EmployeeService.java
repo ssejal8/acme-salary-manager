@@ -18,6 +18,8 @@ import com.acme.salary.orgdata.Designation;
 import com.acme.salary.orgdata.DesignationRepository;
 import com.acme.salary.orgdata.Grade;
 import com.acme.salary.orgdata.GradeRepository;
+import com.acme.salary.security.UserAccountService;
+import com.acme.salary.security.UserAccountService.ProvisionedLogin;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -47,6 +49,16 @@ public class EmployeeService {
     private final DepartmentRepository departments;
     private final DesignationRepository designations;
     private final GradeRepository grades;
+
+    /**
+     * The security feature's published port for accounts.
+     *
+     * <p>This package does not construct a {@code User}: the password policy, the hashing
+     * and the decision to reuse an existing login are the security feature's business
+     * (ADR-001). It asks for a login and is told which one it got.
+     */
+    private final UserAccountService accounts;
+
     private final AuditService audit;
 
     public EmployeeService(
@@ -54,11 +66,13 @@ public class EmployeeService {
             DepartmentRepository departments,
             DesignationRepository designations,
             GradeRepository grades,
+            UserAccountService accounts,
             AuditService audit) {
         this.employees = employees;
         this.departments = departments;
         this.designations = designations;
         this.grades = grades;
+        this.accounts = accounts;
         this.audit = audit;
     }
 
@@ -106,12 +120,24 @@ public class EmployeeService {
                 grade(request.gradeId()));
 
         Employee saved = employees.save(employee);
+
+        // FR-2.7: the work email is the username, so the login is provisioned with the
+        // record rather than as a separate administrative chore somebody has to remember.
+        // Both writes are in this transaction: an employee with no login, or a login with
+        // no employee, is a worse state than neither existing.
+        ProvisionedLogin login = accounts.provisionLoginFor(saved.getWorkEmail());
+        saved.linkUser(login.userId());
+
         audit.record(AuditEntityType.EMPLOYEE, saved.getId(), AuditAction.EMPLOYEE_CREATED,
                 Map.of(
                         "employeeCode", saved.getEmployeeCode(),
                         "dateOfJoining", saved.getDateOfJoining().toString(),
-                        "grade", saved.getGrade().getName()));
-        return EmployeeSummaryResponse.from(saved);
+                        "grade", saved.getGrade().getName(),
+                        // The id, never the password. Nothing about a credential belongs
+                        // in an audit row (FR-1.2).
+                        "userId", login.userId()));
+
+        return EmployeeSummaryResponse.from(saved, login.temporaryPassword());
     }
 
     /**
@@ -141,6 +167,13 @@ public class EmployeeService {
                 department(request.departmentId()),
                 designation(request.designationId()),
                 grade(request.gradeId()));
+
+        // The work email is the login's username (FR-2.7), so correcting one without the
+        // other would leave this person signing in with an address their record no longer
+        // shows. Only for an employee who has a login: most seeded records do not.
+        if (employee.getUserId() != null) {
+            accounts.changeLoginEmail(employee.getUserId(), workEmail);
+        }
 
         audit.record(AuditEntityType.EMPLOYEE, employee.getId(), AuditAction.EMPLOYEE_UPDATED,
                 Map.of(

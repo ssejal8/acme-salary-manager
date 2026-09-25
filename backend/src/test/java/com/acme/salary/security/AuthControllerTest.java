@@ -2,18 +2,22 @@ package com.acme.salary.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-
+import com.acme.salary.common.error.ValidationException;
 import com.acme.salary.security.dto.AuthenticatedUserResponse;
+import com.acme.salary.security.dto.ChangePasswordRequest;
 import com.acme.salary.security.dto.LoginRequest;
 import com.acme.salary.security.dto.TokenResponse;
 import com.acme.salary.security.jwt.InvalidTokenException;
 import com.acme.salary.support.ApiSecurityTestConfig;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
@@ -23,6 +27,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.test.context.support.WithAnonymousUser;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
@@ -48,6 +53,10 @@ class AuthControllerTest {
     /** Replaces the mock {@link ApiSecurityTestConfig} supplies, so it can be stubbed. */
     @MockitoBean
     private AuthenticationService authentication;
+
+    /** Changing a password lives on this controller, so the bean has to exist. */
+    @MockitoBean
+    private UserAccountService accounts;
 
     @Captor
     private ArgumentCaptor<LoginRequest> loginCaptor;
@@ -203,5 +212,85 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.fieldErrors[0].field").value("refreshToken"));
 
         verify(authentication, never()).refresh(any());
+    }
+
+    /** Changing your own password (FR-1.6). */
+    @Nested
+    @DisplayName("POST /auth/change-password")
+    class ChangePassword {
+
+        private static final String BODY = """
+                {"currentPassword": "Current@12345", "newPassword": "Replacement@123"}""";
+
+        @Test
+        @WithMockUser(roles = "EMPLOYEE")
+        void answers204AndPassesTheRequestThrough() throws Exception {
+            mockMvc.perform(post("/api/v1/auth/change-password")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(BODY))
+                    .andExpect(status().isNoContent());
+
+            verify(accounts).changeOwnPassword(
+                    new ChangePasswordRequest("Current@12345", "Replacement@123"));
+        }
+
+        @Test
+        @WithMockUser(roles = "ADMIN")
+        void isOpenToEveryRoleBecauseItIsAlwaysTheCallersOwnAccount() throws Exception {
+            mockMvc.perform(post("/api/v1/auth/change-password")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(BODY))
+                    .andExpect(status().isNoContent());
+        }
+
+        @Test
+        @WithAnonymousUser
+        void isNotPublicUnlikeLoginAndRefresh() throws Exception {
+            mockMvc.perform(post("/api/v1/auth/change-password")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(BODY))
+                    .andExpect(status().isUnauthorized());
+
+            verify(accounts, never()).changeOwnPassword(any());
+        }
+
+        @Test
+        @WithMockUser(roles = "EMPLOYEE")
+        void requiresBothPasswords() throws Exception {
+            mockMvc.perform(post("/api/v1/auth/change-password")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"newPassword\": \"Replacement@123\"}"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.fieldErrors[0].field").value("currentPassword"));
+
+            verify(accounts, never()).changeOwnPassword(any());
+        }
+
+        @Test
+        @WithMockUser(roles = "EMPLOYEE")
+        void aWrongCurrentPasswordIsA400NotA401() throws Exception {
+            // A 401 would make the client's auth interceptor end the session over a typo.
+            doThrow(ValidationException.field("currentPassword", "is not correct"))
+                    .when(accounts).changeOwnPassword(any());
+
+            mockMvc.perform(post("/api/v1/auth/change-password")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(BODY))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.fieldErrors[0].field").value("currentPassword"))
+                    .andExpect(jsonPath("$.fieldErrors[0].message").value("is not correct"));
+        }
+
+        @Test
+        @WithMockUser(roles = "EMPLOYEE")
+        void neverEchoesAPasswordBack() throws Exception {
+            // FR-1.2: no response in this API carries a password field, including this one.
+            String body = mockMvc.perform(post("/api/v1/auth/change-password")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(BODY))
+                    .andReturn().getResponse().getContentAsString();
+
+            assertThat(body).doesNotContain("Current@12345").doesNotContain("Replacement@123");
+        }
     }
 }

@@ -69,6 +69,17 @@ public class User extends AuditableEntity {
         this.tokenVersion++;
     }
 
+    /**
+     * Moves the login to a new address, which is also its username (FR-2.7).
+     *
+     * <p>Outstanding tokens are deliberately left alone. A token identifies its user by
+     * id, not by address, so the session belongs to the same person after the correction —
+     * bumping the version here would sign somebody out for a typo fixed on their behalf.
+     */
+    public void changeEmail(String newEmail) {
+        this.email = requireEmail(newEmail);
+    }
+
     public CurrentUser toCurrentUser() {
         return new CurrentUser(getId(), email, role);
     }

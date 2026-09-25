@@ -64,6 +64,12 @@
           <!-- The role is shown because it explains what the menu does and does not offer. -->
           <span class="header__role">{{ user.role }}</span>
         </span>
+        <a
+          class="button button--secondary button--compact header__account-link"
+          routerLink="/change-password"
+        >
+          Change password
+        </a>
         <button type="button" class="button button--secondary button--compact" (click)="signOut()">
           Sign out
         </button>

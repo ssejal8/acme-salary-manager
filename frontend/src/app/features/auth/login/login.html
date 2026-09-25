@@ -10,6 +10,17 @@
       </p>
     }
 
+    @if (passwordChanged()) {
+      <!--
+        A different message from an expired session, because nothing went wrong: changing
+        a password invalidates every outstanding token deliberately, so signing in again
+        is the expected next step rather than an interruption.
+      -->
+      <p class="alert alert--info" role="status">
+        Your password has been changed. Sign in with the new one.
+      </p>
+    }
+
     @if (errorMessage(); as message) {
       <!--
         role="alert" so the failure is announced. The message comes from the server, which

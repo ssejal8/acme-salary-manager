@@ -195,3 +195,8 @@
     padding: 0;
   }
 }
+
+/* An anchor styled as a button: it navigates, so it stays a link (WCAG 4.1.2). */
+.header__account-link {
+  text-decoration: none;
+}

@@ -39,6 +39,17 @@ export class Login {
     this.router.parseUrl(this.router.url).queryParams['expired'] === 'true',
   );
 
+  /**
+   * Set when the user arrived because they changed their password (FR-1.6).
+   *
+   * A different message from an expired session, because it is a different event: nothing
+   * timed out and nothing went wrong — changing a password invalidates every outstanding
+   * token by design (ADR-004), so signing in again is the expected next step.
+   */
+  readonly passwordChanged = signal(
+    this.router.parseUrl(this.router.url).queryParams['passwordChanged'] === 'true',
+  );
+
   private readonly redirectTo =
     (this.router.parseUrl(this.router.url).queryParams['redirectTo'] as string | undefined) ??
     '/employees';
