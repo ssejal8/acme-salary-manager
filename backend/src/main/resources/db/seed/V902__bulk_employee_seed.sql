@@ -280,6 +280,7 @@ BEGIN
     )
     SELECT
         structure.id AS structure_id,
+        structure.superseded_on,
         grade.min_ctc,
         grade.max_ctc,
         basics.basic,
@@ -299,7 +300,7 @@ BEGIN
       JOIN salary_structure_components line ON line.structure_id = structure.id
       JOIN salary_components component ON component.id = line.component_id
       JOIN basics ON basics.structure_id = structure.id
-     GROUP BY structure.id, grade.min_ctc, grade.max_ctc, basics.basic;
+     GROUP BY structure.id, structure.superseded_on, grade.min_ctc, grade.max_ctc, basics.basic;
 
     SELECT count(*) INTO total_employees FROM employees;
     SELECT count(*) INTO generated_employees
@@ -349,10 +350,16 @@ BEGIN
     -- FR-4.3: annual CTC is twelve times gross and must sit inside the grade band, or the
     -- API would have demanded an override reason. An absent bound means unbounded on that
     -- side, not zero.
+    --
+    -- Current revisions only. The band is read from the employee's grade today, and the
+    -- schema does not record the grade a superseded revision was priced against — so
+    -- E-1001's pre-raise G2 package (5001) would be judged against her current G3 band
+    -- and fail, though it was valid when written.
     SELECT count(*) INTO out_of_band
       FROM seed_costed
-     WHERE (min_ctc IS NOT NULL AND 12 * gross < min_ctc)
-        OR (max_ctc IS NOT NULL AND 12 * gross > max_ctc);
+     WHERE superseded_on IS NULL
+       AND ((min_ctc IS NOT NULL AND 12 * gross < min_ctc)
+         OR (max_ctc IS NOT NULL AND 12 * gross > max_ctc));
     IF out_of_band > 0 THEN
         RAISE EXCEPTION 'bulk seed: % packages fall outside their grade CTC band', out_of_band;
     END IF;
