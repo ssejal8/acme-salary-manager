@@ -13,6 +13,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -146,6 +147,9 @@ class DevSeedIT {
     }
 
     @Test
+    // Rolled back: every test in this class shares one database, so a committed insert
+    // here made the headcount assertions depend on test order (10,001, not 10,000).
+    @Transactional
     void anEmployeeCanStillBeCreatedThroughTheOrdinaryPath() {
         assertThatCode(() -> jdbc.update("""
                 INSERT INTO employees (employee_code, first_name, last_name, work_email,
