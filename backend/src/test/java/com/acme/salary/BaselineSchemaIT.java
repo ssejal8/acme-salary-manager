@@ -95,10 +95,10 @@ class BaselineSchemaIT {
         long gradeId = insertGrade();
         String code = "E-" + SEQ.incrementAndGet();
 
-        insertEmployee(code, "first" + code + "@acme.test", departmentId, designationId, gradeId);
+        insertEmployee(code, "first" + code.toLowerCase() + "@acme.test", departmentId, designationId, gradeId);
 
         assertThatThrownBy(() -> insertEmployee(
-                code, "second" + code + "@acme.test", departmentId, designationId, gradeId))
+                code, "second" + code.toLowerCase() + "@acme.test", departmentId, designationId, gradeId))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
@@ -115,7 +115,7 @@ class BaselineSchemaIT {
                 INSERT INTO employees (employee_code, first_name, last_name, work_email,
                                        date_of_joining, status, department_id, designation_id, grade_id)
                 VALUES (?, 'Leaver', 'Test', ?, DATE '2024-01-01', 'INACTIVE', ?, ?, ?)
-                """, code, code + "@acme.test", departmentId, designationId, gradeId))
+                """, code, code.toLowerCase() + "@acme.test", departmentId, designationId, gradeId))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
@@ -126,7 +126,7 @@ class BaselineSchemaIT {
         long designationId = insertDesignation();
         long gradeId = insertGrade();
         String code = "E-" + SEQ.incrementAndGet();
-        insertEmployee(code, code + "@acme.test", departmentId, designationId, gradeId);
+        insertEmployee(code, code.toLowerCase() + "@acme.test", departmentId, designationId, gradeId);
 
         assertThatThrownBy(() -> jdbc.update("DELETE FROM departments WHERE id = ?", departmentId))
                 .isInstanceOf(DataIntegrityViolationException.class);
@@ -154,7 +154,7 @@ class BaselineSchemaIT {
         long designationId = insertDesignation();
         long gradeId = insertGrade();
         String code = "E-" + SEQ.incrementAndGet();
-        long employeeId = insertEmployee(code, code + "@acme.test", departmentId, designationId, gradeId);
+        long employeeId = insertEmployee(code, code.toLowerCase() + "@acme.test", departmentId, designationId, gradeId);
         long runId = insertRun(2035 + SEQ.incrementAndGet(), 4, "DRAFT", userId);
 
         assertThatThrownBy(() -> jdbc.update("""
@@ -179,7 +179,7 @@ class BaselineSchemaIT {
         long designationId = insertDesignation();
         long gradeId = insertGrade();
         String code = "E-" + SEQ.incrementAndGet();
-        long employeeId = insertEmployee(code, code + "@acme.test", departmentId, designationId, gradeId);
+        long employeeId = insertEmployee(code, code.toLowerCase() + "@acme.test", departmentId, designationId, gradeId);
         long runId = insertRun(2040 + SEQ.incrementAndGet(), 5, "DRAFT", userId);
 
         assertThatThrownBy(() -> jdbc.update("""
@@ -198,7 +198,7 @@ class BaselineSchemaIT {
         long designationId = insertDesignation();
         long gradeId = insertGrade();
         String code = "E-" + SEQ.incrementAndGet();
-        long employeeId = insertEmployee(code, code + "@acme.test", departmentId, designationId, gradeId);
+        long employeeId = insertEmployee(code, code.toLowerCase() + "@acme.test", departmentId, designationId, gradeId);
 
         jdbc.update("""
                 INSERT INTO salary_structures (employee_id, effective_from, created_by)

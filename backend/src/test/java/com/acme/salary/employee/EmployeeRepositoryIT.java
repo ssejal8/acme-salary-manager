@@ -11,6 +11,9 @@ import com.acme.salary.orgdata.Designation;
 import com.acme.salary.orgdata.DesignationRepository;
 import com.acme.salary.orgdata.Grade;
 import com.acme.salary.orgdata.GradeRepository;
+import com.acme.salary.security.Role;
+import com.acme.salary.security.User;
+import com.acme.salary.security.UserRepository;
 import com.acme.salary.support.ClockTestConfig;
 import java.lang.reflect.Field;
 import java.math.BigDecimal;
@@ -78,6 +81,9 @@ class EmployeeRepositoryIT {
     private GradeRepository grades;
 
     @Autowired
+    private UserRepository users;
+
+    @Autowired
     private TestEntityManager entityManager;
 
     private Department engineering;
@@ -119,9 +125,12 @@ class EmployeeRepositoryIT {
 
         Employee duplicate = new Employee("IT-002", "Second", "Person", "other@acme.test",
                 LocalDate.of(2024, 5, 1), engineering, engineer, grade);
-        employees.save(duplicate);
 
-        assertThatThrownBy(() -> entityManager.flush()).isInstanceOf(DataIntegrityViolationException.class);
+        // saveAndFlush inside the assertion: the IDENTITY insert runs on save, so a save
+        // outside it would throw before the assertion — and only a repository call has
+        // its exception translated into DataIntegrityViolationException.
+        assertThatThrownBy(() -> employees.saveAndFlush(duplicate))
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
@@ -132,10 +141,11 @@ class EmployeeRepositoryIT {
                 LocalDate.of(2024, 4, 1), engineering, engineer, grade));
         entityManager.flush();
 
-        employees.save(new Employee("IT-004", "Other", "Person", "asha.menon@acme.test",
-                LocalDate.of(2024, 4, 1), engineering, engineer, grade));
+        Employee caseVariant = new Employee("IT-004", "Other", "Person", "asha.menon@acme.test",
+                LocalDate.of(2024, 4, 1), engineering, engineer, grade);
 
-        assertThatThrownBy(() -> entityManager.flush()).isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> employees.saveAndFlush(caseVariant))
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
@@ -263,14 +273,17 @@ class EmployeeRepositoryIT {
 
     @Test
     void anEmployeeCanBeFoundByTheLoginLinkedToThem() {
+        // A real user row: the link is an id rather than an association, but
+        // fk_employees_user still requires the row to exist.
+        Long userId = users.save(
+                new User("lk-001-login@acme.test", "$2a$10$notarealhashusedonlyintests000", Role.EMPLOYEE))
+                .getId();
         Employee saved = employees.save(employee("LK-001", "Asha", "Menon", LocalDate.of(2024, 4, 1), engineering));
-        saved.linkUser(4242L);
+        saved.linkUser(userId);
         entityManager.flush();
         entityManager.clear();
 
-        // No FK to a real user row is asserted here — the id is deliberately not an
-        // association, so this query does not drag the auth feature into the test.
-        assertThat(employees.findByUserId(4242L)).map(Employee::getEmployeeCode).contains("LK-001");
+        assertThat(employees.findByUserId(userId)).map(Employee::getEmployeeCode).contains("LK-001");
     }
 
     @Test

@@ -56,19 +56,36 @@ class DevSeedIT {
         List<String> versions = jdbc.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success = TRUE", String.class);
 
-        assertThat(versions).contains("1", "2", "900", "901");
+        assertThat(versions).contains("1", "2", "900", "901", "902");
     }
 
     @Test
-    void seedsTwelveEmployeesWithStableIds() {
-        // Deterministic ids are the point: a demo or a test may name employee 1001.
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM employees", Integer.class)).isEqualTo(12);
+    void seedsTwelveCuratedEmployeesWithStableIds() {
+        // Deterministic ids are the point: a demo or a test may name employee 1001. The
+        // curated twelve are ids 1001-1012; V902 generates everyone above them, so these
+        // counts are scoped to that range rather than to the table.
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM employees WHERE id <= 1012", Integer.class)).isEqualTo(12);
         assertThat(jdbc.queryForObject(
                 "SELECT employee_code FROM employees WHERE id = 1001", String.class))
                 .isEqualTo("E-1001");
         assertThat(jdbc.queryForObject(
-                "SELECT count(*) FROM employees WHERE status = 'ACTIVE'", Integer.class))
+                "SELECT count(*) FROM employees WHERE id <= 1012 AND status = 'ACTIVE'",
+                Integer.class))
                 .isEqualTo(11);
+    }
+
+    @Test
+    void theBulkSeedTakesTheDatasetToTenThousand() {
+        // The same figures the CI seed job and the README assert.
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM employees", Integer.class))
+                .isEqualTo(10000);
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM employees WHERE id > 1012 AND status = 'INACTIVE'",
+                Integer.class))
+                .isEqualTo(102);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM salary_structures", Integer.class))
+                .isEqualTo(9960);
     }
 
     @Test
@@ -79,8 +96,9 @@ class DevSeedIT {
     }
 
     @Test
-    void seedsElevenRevisionsWithExactlyOneRaiseHistory() {
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM salary_structures", Integer.class))
+    void seedsElevenCuratedRevisionsWithExactlyOneRaiseHistory() {
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM salary_structures WHERE employee_id <= 1012", Integer.class))
                 .isEqualTo(11);
         assertThat(jdbc.queryForObject(
                 "SELECT count(*) FROM salary_structures WHERE employee_id = 1001", Integer.class))
@@ -122,8 +140,9 @@ class DevSeedIT {
         Long nextStructureId = jdbc.queryForObject(
                 "SELECT nextval(pg_get_serial_sequence('salary_structures', 'id'))", Long.class);
 
-        assertThat(nextEmployeeId).isGreaterThan(1012L);
-        assertThat(nextStructureId).isGreaterThan(5011L);
+        // Past V902's ids, which are the highest seeded.
+        assertThat(nextEmployeeId).isGreaterThan(11000L);
+        assertThat(nextStructureId).isGreaterThan(29988L);
     }
 
     @Test
@@ -131,7 +150,7 @@ class DevSeedIT {
         assertThatCode(() -> jdbc.update("""
                 INSERT INTO employees (employee_code, first_name, last_name, work_email,
                                        date_of_joining, department_id, designation_id, grade_id)
-                SELECT 'E-9999', 'Post', 'Seed', 'post.seed@acme.test', DATE '2026-09-01',
+                SELECT 'POST-SEED-1', 'Post', 'Seed', 'post.seed@acme.test', DATE '2026-09-01',
                        d.id, g.id, gr.id
                 FROM departments d, designations g, grades gr
                 WHERE d.code = 'ENG' AND g.title = 'Software Engineer' AND gr.name = 'G1'
@@ -150,6 +169,7 @@ class DevSeedIT {
                 JOIN salary_components c ON c.id = line.component_id
                 WHERE s.superseded_on IS NULL
                   AND e.status = 'ACTIVE'
+                  AND e.id <= 1012
                   AND c.type = 'EARNING'
                   AND c.calculation_type = 'FLAT'
                 """, BigDecimal.class);

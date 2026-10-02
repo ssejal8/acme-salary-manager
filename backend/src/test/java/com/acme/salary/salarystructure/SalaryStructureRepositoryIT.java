@@ -144,9 +144,13 @@ class SalaryStructureRepositoryIT {
         structures.save(structure(LocalDate.of(2026, 4, 1), "50000"));
         entityManager.flush();
 
-        structures.save(structure(LocalDate.of(2026, 10, 1), "60000"));
+        SalaryStructure secondOpen = structure(LocalDate.of(2026, 10, 1), "60000");
 
-        assertThatThrownBy(() -> entityManager.flush()).isInstanceOf(DataIntegrityViolationException.class);
+        // saveAndFlush inside the assertion: the IDENTITY insert runs on save, so a save
+        // outside it would throw before the assertion — and only a repository call has
+        // its exception translated into DataIntegrityViolationException.
+        assertThatThrownBy(() -> structures.saveAndFlush(secondOpen))
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
@@ -154,7 +158,11 @@ class SalaryStructureRepositoryIT {
         SalaryStructure first = structures.save(structure(LocalDate.of(2026, 4, 1), "50000"));
         entityManager.flush();
 
+        // Flushed before the successor is saved, as SalaryStructureService.assign does:
+        // the successor's insert runs on save, and with this update still pending the
+        // one-current index would reject it.
         first.supersede(LocalDate.of(2026, 10, 1));
+        entityManager.flush();
         structures.save(structure(LocalDate.of(2026, 10, 1), "60000"));
         entityManager.flush();
         entityManager.clear();
@@ -173,6 +181,7 @@ class SalaryStructureRepositoryIT {
         SalaryStructure first = structures.save(structure(LocalDate.of(2026, 4, 1), "50000"));
         entityManager.flush();
         first.supersede(LocalDate.of(2026, 10, 1));
+        entityManager.flush();
         structures.save(structure(LocalDate.of(2026, 10, 1), "60000"));
         entityManager.flush();
         entityManager.clear();
@@ -201,9 +210,10 @@ class SalaryStructureRepositoryIT {
         first.supersede(LocalDate.of(2026, 10, 1));
         entityManager.flush();
 
-        structures.save(structure(LocalDate.of(2026, 4, 1), "60000"));
+        SalaryStructure sameDate = structure(LocalDate.of(2026, 4, 1), "60000");
 
-        assertThatThrownBy(() -> entityManager.flush()).isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> structures.saveAndFlush(sameDate))
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
@@ -246,17 +256,22 @@ class SalaryStructureRepositoryIT {
         structures.save(structure(LocalDate.of(2026, 4, 1), "50000"));
         entityManager.flush();
 
-        components.delete(providentFund);
+        // Cleared first: the structure still in the session references the definition, so
+        // deleting it there fails in Hibernate (TransientObjectException) before the
+        // database's ON DELETE RESTRICT is ever reached — which is the thing under test.
+        entityManager.clear();
 
-        assertThatThrownBy(() -> entityManager.flush()).isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> {
+            components.deleteById(providentFund.getId());
+            components.flush();
+        }).isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
     void aStructureMustBeAttributedToARealUser() {
         SalaryStructure orphan = new SalaryStructure(employeeId, LocalDate.of(2026, 4, 1), 999_999L, null);
         orphan.addComponent(basic, new BigDecimal("50000"));
-        structures.save(orphan);
-
-        assertThatThrownBy(() -> entityManager.flush()).isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> structures.saveAndFlush(orphan))
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 }

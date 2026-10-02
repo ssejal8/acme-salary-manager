@@ -13,6 +13,9 @@ import com.acme.salary.orgdata.DesignationRepository;
 import com.acme.salary.orgdata.Grade;
 import com.acme.salary.orgdata.GradeRepository;
 import com.acme.salary.salarycomponent.ComponentType;
+import com.acme.salary.security.Role;
+import com.acme.salary.security.User;
+import com.acme.salary.security.UserRepository;
 import com.acme.salary.support.ClockTestConfig;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -90,6 +93,9 @@ class PayslipRepositoryIT {
     private GradeRepository grades;
 
     @Autowired
+    private UserRepository users;
+
+    @Autowired
     private TestEntityManager entityManager;
 
     private Long engineerId;
@@ -118,13 +124,19 @@ class PayslipRepositoryIT {
         engineerId = engineer.getId();
         analystId = analyst.getId();
 
+        // fk_payroll_runs_initiated_by needs a real user. This test runs without the seeds,
+        // so there is no user 1 to borrow.
+        Long initiatedBy = users.save(
+                new User("payroll-it@acme.test", "$2a$10$notarealhashusedonlyintests000", Role.HR))
+                .getId();
+
         // April is finalised and holds both; March is a draft holding only the engineer.
-        PayrollRun april = new PayrollRun(PayrollPeriod.of(2026, 4), 1L);
+        PayrollRun april = new PayrollRun(PayrollPeriod.of(2026, 4), initiatedBy);
         april.computePayslips(amountsFor(engineerId, analystId));
         april.finalise(Instant.parse("2026-05-01T10:00:00Z"));
         aprilRunId = runs.save(april).getId();
 
-        PayrollRun march = new PayrollRun(PayrollPeriod.of(2026, 3), 1L);
+        PayrollRun march = new PayrollRun(PayrollPeriod.of(2026, 3), initiatedBy);
         march.computePayslips(amountsFor(engineerId));
         marchRunId = runs.save(march).getId();
 
