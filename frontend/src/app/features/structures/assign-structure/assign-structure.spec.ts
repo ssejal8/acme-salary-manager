@@ -471,6 +471,35 @@ describe('AssignStructure', () => {
       expect(component.totals()).not.toBeNull();
     });
 
+    it('keeps the reason box open once a partial reason makes the preview pass', async () => {
+      // The regression: the box was derived from the latest preview, so the first
+      // keystroke made the preview succeed and the box vanished mid-sentence.
+      previewResult = () => throwError(bandFailure);
+      await createComponent();
+      await fillPackage();
+
+      previewResult = () => of(totals({ annualCtc: '5000000.00' }));
+      component.form.controls.overrideReason.setValue('Re');
+      await waitPastDebounce();
+
+      expect(component.requiresOverride()).toBe(true);
+      expect(text()).toContain('Override reason required');
+      expect(component.overrideMessage()).toContain("grade G3's band");
+    });
+
+    it('closes the reason box once the package is back inside the band', async () => {
+      previewResult = () => throwError(bandFailure);
+      await createComponent();
+      await fillPackage();
+
+      previewResult = () => of(totals());
+      component.rowFor(1).controls['value'].setValue('50000.00');
+      await waitPastDebounce();
+
+      expect(component.requiresOverride()).toBe(false);
+      expect(text()).not.toContain('Override reason required');
+    });
+
     it('omits the reason entirely when it is blank', async () => {
       // An empty string is not "no reason" to a server checking for blankness.
       await createComponent();

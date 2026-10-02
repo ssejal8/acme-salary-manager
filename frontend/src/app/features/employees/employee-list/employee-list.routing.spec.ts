@@ -186,6 +186,22 @@ describe('EmployeeList URL synchronisation', () => {
       expect(component.pageSize()).toBe(50);
     });
 
+    it('displays the size actually in use, not the first option', async () => {
+      // The regression: the select's value was bound before its options rendered, so it
+      // read 10 while the list paged at 20 — "495 pages at 10 rows" for 9,900 people.
+      await open();
+
+      const select = harness.routeNativeElement?.querySelector<HTMLSelectElement>('#page-size');
+      expect(select!.value).toBe('20');
+    });
+
+    it('displays a restored size in the selector itself', async () => {
+      await open('/employees?size=50');
+
+      const select = harness.routeNativeElement?.querySelector<HTMLSelectElement>('#page-size');
+      expect(select!.value).toBe('50');
+    });
+
     it('requests one page, not two, for a link with parameters', async () => {
       // The criteria signal has a semantic equality function precisely so the router's
       // re-emission on navigation does not cause a duplicate request.

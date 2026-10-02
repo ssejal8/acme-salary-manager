@@ -39,12 +39,13 @@
       <select
         id="filter-month"
         class="select"
-        [value]="periodMonth() ?? ''"
         (change)="setPeriodMonth($any($event.target).value)"
       >
         <option value="">Any month</option>
         @for (month of months; track month.value) {
-          <option [value]="month.value">{{ month.label }}</option>
+          <option [value]="month.value" [selected]="month.value === periodMonth()">
+            {{ month.label }}
+          </option>
         }
       </select>
     </div>
@@ -54,12 +55,11 @@
       <select
         id="filter-year"
         class="select"
-        [value]="periodYear() ?? ''"
         (change)="setPeriodYear($any($event.target).value)"
       >
         <option value="">Any year</option>
         @for (year of years; track year) {
-          <option [value]="year">{{ year }}</option>
+          <option [value]="year" [selected]="year === periodYear()">{{ year }}</option>
         }
       </select>
     </div>
@@ -69,12 +69,13 @@
       <select
         id="filter-department"
         class="select"
-        [value]="departmentId() ?? ''"
         (change)="setDepartment($any($event.target).value)"
       >
         <option value="">Every department</option>
         @for (department of departments(); track department.id) {
-          <option [value]="department.id">{{ department.name }}</option>
+          <option [value]="department.id" [selected]="department.id === departmentId()">
+            {{ department.name }}
+          </option>
         }
       </select>
     </div>

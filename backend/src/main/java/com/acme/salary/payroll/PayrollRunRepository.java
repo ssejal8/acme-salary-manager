@@ -21,14 +21,16 @@ public interface PayrollRunRepository extends JpaRepository<PayrollRun, Long> {
     /**
      * A run with its payslips and their lines, for the review screen (FR-5.6).
      *
-     * <p>Fetched in one query rather than lazily: a draft for a thousand employees would
-     * otherwise be a thousand payslip queries and a thousand more for their lines.
-     * {@code DISTINCT} is required because the two collection joins multiply rows.
+     * <p>The payslips are fetch-joined here; their lines are not. Both collections are
+     * {@code List}s, and Hibernate refuses to fetch two bags in one query
+     * ({@code MultipleBagFetchException}) — at execution, not at startup, so the app boots
+     * and every caller of this method answers 500. The lines are loaded instead in
+     * batches by the {@code @BatchSize} on {@link Payslip}, which keeps a thousand
+     * payslips to a handful of line queries rather than a thousand.
      */
     @Query("""
             SELECT DISTINCT run FROM PayrollRun run
-            LEFT JOIN FETCH run.payslips payslip
-            LEFT JOIN FETCH payslip.lines
+            LEFT JOIN FETCH run.payslips
             WHERE run.id = :id
             """)
     Optional<PayrollRun> findWithPayslips(@Param("id") Long id);

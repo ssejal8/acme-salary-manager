@@ -14,6 +14,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import org.hibernate.annotations.BatchSize;
 
 /**
  * One employee's pay for one period.
@@ -75,8 +76,13 @@ public class Payslip extends BaseEntity {
      * Lines are owned by the payslip: created with it, deleted with it, and never shared.
      * {@code orphanRemoval} is what lets a recompute discard the old lines by clearing the
      * collection.
+     *
+     * <p>Batch-fetched because a run cannot fetch-join these alongside its payslips (see
+     * {@link PayrollRunRepository#findWithPayslips}): touching one payslip's lines loads
+     * the lines of the next 500 in the same query.
      */
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @BatchSize(size = 500)
     @JoinColumn(name = "payslip_id", nullable = false)
     @OrderBy("sortOrder ASC")
     private List<PayslipLine> lines = new ArrayList<>();

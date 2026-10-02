@@ -31,12 +31,11 @@
       <select
         id="filter-entity"
         class="select"
-        [value]="entityType()"
         (change)="setEntityType($any($event.target).value)"
       >
         <option value="">Everything</option>
         @for (type of entityTypes; track type) {
-          <option [value]="type">{{ readable(type) }}</option>
+          <option [value]="type" [selected]="type === entityType()">{{ readable(type) }}</option>
         }
       </select>
     </div>
@@ -46,12 +45,11 @@
       <select
         id="filter-action"
         class="select"
-        [value]="action()"
         (change)="setAction($any($event.target).value)"
       >
         <option value="">Any action</option>
         @for (name of actions; track name) {
-          <option [value]="name">{{ readable(name) }}</option>
+          <option [value]="name" [selected]="name === action()">{{ readable(name) }}</option>
         }
       </select>
     </div>

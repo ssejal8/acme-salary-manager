@@ -119,19 +119,22 @@ export class AssignStructure {
   );
 
   /**
-   * Whether the server has asked for an override reason.
+   * The server's account of the missed band, once it has asked for an override reason.
    *
-   * Derived from the field error rather than from a band check of our own: the band lives
+   * Taken from the field error rather than from a band check of our own: the band lives
    * on the employee's grade and the CTC is the server's arithmetic, so duplicating the
    * test here would be a second implementation that could disagree.
+   *
+   * Held rather than derived from the latest preview, because typing the reason is what
+   * makes the next preview succeed. Derived, the box vanished a keystroke or two into
+   * the reason — so it is cleared only by a preview that passes *without* a reason,
+   * which is the server saying the package is back inside the band.
    */
-  readonly requiresOverride = computed(
-    () => this.previewFailure()?.messageFor('overrideReason') !== undefined,
-  );
+  private readonly overridePrompt = signal<string | null>(null);
 
-  readonly overrideMessage = computed(
-    () => this.previewFailure()?.messageFor('overrideReason') ?? null,
-  );
+  readonly requiresOverride = computed(() => this.overridePrompt() !== null);
+
+  readonly overrideMessage = this.overridePrompt.asReadonly();
 
   /** A problem with the chosen components — no BASIC, deductions too high, and so on. */
   readonly componentsMessage = computed(
@@ -320,6 +323,9 @@ export class AssignStructure {
       next: (totals) => {
         this.totals.set(totals);
         this.previewFailure.set(null);
+        if (!request.overrideReason) {
+          this.overridePrompt.set(null);
+        }
         this.previewing.set(false);
       },
       error: (failure: unknown) => {
@@ -327,6 +333,10 @@ export class AssignStructure {
         // worse than no figure, because it looks like the package is costed and fine.
         this.totals.set(null);
         this.previewFailure.set(failure instanceof ApiFailure ? failure : null);
+        const bandMissed = this.previewFailure()?.messageFor('overrideReason');
+        if (bandMissed !== undefined) {
+          this.overridePrompt.set(bandMissed);
+        }
         this.previewing.set(false);
       },
     });

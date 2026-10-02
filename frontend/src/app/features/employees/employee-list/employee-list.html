@@ -51,7 +51,9 @@
       >
         <option value="">Any department</option>
         @for (department of reference().departments; track department.id) {
-          <option [value]="department.id">{{ department.name }}</option>
+          <option [value]="department.id" [selected]="department.id === criteria().departmentId">
+            {{ department.name }}
+          </option>
         }
       </select>
     </div>
@@ -65,7 +67,9 @@
       >
         <option value="">Any designation</option>
         @for (designation of reference().designations; track designation.id) {
-          <option [value]="designation.id">{{ designation.title }}</option>
+          <option [value]="designation.id" [selected]="designation.id === criteria().designationId">
+            {{ designation.title }}
+          </option>
         }
       </select>
     </div>
@@ -79,7 +83,7 @@
       >
         <option value="">Any grade</option>
         @for (grade of reference().grades; track grade.id) {
-          <option [value]="grade.id">{{ grade.name }}</option>
+          <option [value]="grade.id" [selected]="grade.id === criteria().gradeId">{{ grade.name }}</option>
         }
       </select>
     </div>
@@ -93,11 +97,12 @@
       <select
         id="filter-status"
         class="select"
-        [value]="statusFilter()"
         (change)="onStatusChange($any($event.target).value)"
       >
         @for (option of statusOptions; track option.value) {
-          <option [value]="option.value">{{ option.label }}</option>
+          <option [value]="option.value" [selected]="option.value === statusFilter()">
+            {{ option.label }}
+          </option>
         }
       </select>
     </div>
@@ -220,11 +225,15 @@
       <select
         id="page-size"
         class="select list-footer__size-select"
-        [value]="pageSize()"
         (change)="onPageSizeChange($any($event.target).value)"
       >
         @for (size of pageSizeOptions; track size) {
-          <option [value]="size">{{ size }}</option>
+          <!--
+            [selected] per option, not [value] on the select: the select's value is set
+            before these options exist, so the browser fell back to the first one and
+            showed 10 rows per page while the list was paging at 20.
+          -->
+          <option [value]="size" [selected]="size === pageSize()">{{ size }}</option>
         }
       </select>
     </div>
