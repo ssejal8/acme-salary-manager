@@ -159,6 +159,19 @@ class PayrollRunTest {
         }
 
         @Test
+        void updatesASurvivingLineInPlaceRatherThanReplacingIt() {
+            PayrollRun run = draftRun();
+            run.computePayslips(cohort());
+            PayslipLine basicBefore = run.payslipFor(1001L).orElseThrow().getLines().get(0);
+
+            run.computePayslips(Map.of(1001L, amounts("45000.00", "2800.00")));
+
+            PayslipLine basicAfter = run.payslipFor(1001L).orElseThrow().getLines().get(0);
+            assertThat(basicAfter).isSameAs(basicBefore);
+            assertThat(basicAfter.getAmount()).isEqualByComparingTo("45000.00");
+        }
+
+        @Test
         void carriesTheDayCountsOntoThePayslip() {
             PayrollRun run = draftRun();
             PayslipAmounts withLop = new PayslipAmounts(

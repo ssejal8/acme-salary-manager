@@ -25,17 +25,17 @@ public class PayslipLine extends BaseEntity {
     @Column(name = "component_code", nullable = false, length = 30, updatable = false)
     private String componentCode;
 
-    @Column(name = "component_name", nullable = false, length = 120, updatable = false)
+    @Column(name = "component_name", nullable = false, length = 120)
     private String componentName;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "type", nullable = false, length = 20, updatable = false)
+    @Column(name = "type", nullable = false, length = 20)
     private ComponentType type;
 
-    @Column(name = "amount", nullable = false, precision = 12, scale = 2, updatable = false)
+    @Column(name = "amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal amount;
 
-    @Column(name = "sort_order", nullable = false, updatable = false)
+    @Column(name = "sort_order", nullable = false)
     private int sortOrder;
 
     protected PayslipLine() {
@@ -44,6 +44,10 @@ public class PayslipLine extends BaseEntity {
 
     PayslipLine(PayslipAmounts.Line line) {
         this.componentCode = line.code();
+        apply(line);
+    }
+
+    void apply(PayslipAmounts.Line line) {
         this.componentName = line.name();
         this.type = line.type();
         this.amount = line.amount();

@@ -13,7 +13,9 @@ import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.hibernate.annotations.BatchSize;
 
 /**
@@ -110,13 +112,22 @@ public class Payslip extends BaseEntity {
         this.totalDeductions = amounts.totalDeductions();
         this.netPay = amounts.netPay();
 
-        // Cleared rather than mutated in place: the component set can change between
-        // recomputes, so matching lines up one by one would be more code and more ways to
-        // be wrong than simply rebuilding them.
-        this.lines.clear();
-        for (PayslipAmounts.Line line : amounts.lines()) {
-            this.lines.add(new PayslipLine(line));
+        Map<String, PayslipLine> existing = new HashMap<>();
+        for (PayslipLine line : this.lines) {
+            existing.put(line.getComponentCode(), line);
         }
+        List<PayslipLine> rebuilt = new ArrayList<>();
+        for (PayslipAmounts.Line line : amounts.lines()) {
+            PayslipLine current = existing.get(line.code());
+            if (current == null) {
+                rebuilt.add(new PayslipLine(line));
+            } else {
+                current.apply(line);
+                rebuilt.add(current);
+            }
+        }
+        this.lines.clear();
+        this.lines.addAll(rebuilt);
     }
 
     public PayrollRun getRun() {
