@@ -41,16 +41,18 @@ export const authGuard: CanActivateFn = (_route, state): boolean | UrlTree => {
  * Again presentation only: the matching `@PreAuthorize` on the endpoint is the control
  * (FR-1.4). This spares an EMPLOYEE a screen that would only fill with 403s.
  *
- * Returns the not-authorised page rather than the login screen, because the user is
- * signed in — sending them to log in again would suggest that a different password would
- * help.
+ * Sends the user to their own landing screen (see `landingRedirect`) rather than to the
+ * login screen, because they are signed in — offering the login form would suggest a
+ * different password would help. Not to a no-access page either: an EMPLOYEE who types
+ * `/audit` has a home to go to, and a dead end with a "Go back" button is one more click
+ * to reach it.
  */
 export function roleGuard(...allowed: Role[]): CanActivateFn {
   return (): boolean | UrlTree => {
     const auth = inject(AuthService);
     const router = inject(Router);
 
-    return auth.hasAnyRole(...allowed) ? true : router.createUrlTree(['/not-authorised']);
+    return auth.hasAnyRole(...allowed) ? true : router.createUrlTree(['/']);
   };
 }
 

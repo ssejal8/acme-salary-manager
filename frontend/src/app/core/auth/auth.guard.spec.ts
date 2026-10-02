@@ -114,14 +114,14 @@ describe('route guards', () => {
       expect(runRoleGuard('ADMIN', 'HR')).not.toBe(true);
     });
 
-    it('sends them to the no-access page, not back to sign in', () => {
+    it('sends them to their own landing screen, not back to sign in', () => {
       // They are signed in. Offering the login form would suggest a different password
-      // would help, when the answer is that this role does not have access.
+      // would help; the root redirects each role to the screen that is theirs.
       stub = { isAuthenticated: true, expired: false, role: 'EMPLOYEE' };
 
       runRoleGuard('ADMIN', 'HR');
 
-      expect(createUrlTree).toHaveBeenCalledWith(['/not-authorised']);
+      expect(createUrlTree).toHaveBeenCalledWith(['/']);
     });
   });
 

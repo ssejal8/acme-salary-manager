@@ -147,6 +147,7 @@ public class SalaryStructureService {
             audit.record(AuditEntityType.SALARY_STRUCTURE, existing.getId(),
                     AuditAction.SALARY_STRUCTURE_SUPERSEDED,
                     Map.of("employeeId", employeeId, "supersededOn", request.effectiveFrom().toString()));
+            structures.flush();
         });
 
         SalaryStructure structure = new SalaryStructure(

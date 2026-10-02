@@ -294,8 +294,8 @@ single-artifact deployment (ADR-018) needs no configuration change: `/api/v1` re
 the API in both cases.
 
 Sign in with one of the dev accounts below. `hr@acme.test` is the one to use — ADMIN works
-equally, while `asha.menon@acme.test` is an EMPLOYEE and will land on the no-access page,
-because listing everyone is not an employee's endpoint (FR-1.5).
+equally, while `asha.menon@acme.test` is an EMPLOYEE and lands on their own payslips —
+listing everyone is not an employee's endpoint (FR-1.5).
 
 **Default dev credentials** (seeded by the `dev` profile only — never enabled in any
 deployed environment):
@@ -746,7 +746,7 @@ detection, and every feature area lazy-loaded by route. Module-specific notes ar
 | `/change-password` | any authenticated | Change your own password; signs you out, because the token it used is then dead |
 | `/reference-data` | ADMIN | Departments, designations and grades with their CTC bands |
 | `/audit` | ADMIN | Who changed what, and when — the one area HR cannot reach |
-| `/not-authorised` | any | Shown when a signed-in user's role does not cover a route |
+| `/not-authorised` | any | Kept for direct links; a guarded route now redirects to the user's own landing screen instead |
 
 Everything above is server-driven. Nothing is filtered, sorted or paged in the browser, so
 the counts and page numbers are real — sorting page 1 of 12 re-queries and returns the
@@ -1009,8 +1009,8 @@ Authorisation is enforced in the API. The UI hides what a role cannot do as a
 convenience only — it is not a security control.
 
 That split is visible in the code. `roleGuard('ADMIN', 'HR')` on the employees route and
-the `canManageEmployees` check behind the menu both exist so an EMPLOYEE gets an
-explanation instead of a screen filling with 403s. Neither is load-bearing: the matching
+the `canManageEmployees` check behind the menu both exist so an EMPLOYEE is sent to
+their own payslips instead of a screen filling with 403s. Neither is load-bearing: the matching
 `@PreAuthorize` on the endpoint is, and `TokenAuthenticationFlowTest` proves an EMPLOYEE
 token is refused by the API whatever the browser believed.
 

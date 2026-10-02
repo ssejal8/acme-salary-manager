@@ -131,10 +131,10 @@ describe('Login', () => {
       expect(loginCalls).toEqual([{ email: 'hr@acme.test', password: 'Hr@12345' }]);
     });
 
-    it('goes to the employee list by default', () => {
+    it('goes to the role-aware landing by default', () => {
       component.submit();
 
-      expect(navigateByUrl).toHaveBeenCalledWith('/employees', { replaceUrl: true });
+      expect(navigateByUrl).toHaveBeenCalledWith('/', { replaceUrl: true });
     });
 
     it('replaces the history entry, so Back does not return to the login screen', () => {

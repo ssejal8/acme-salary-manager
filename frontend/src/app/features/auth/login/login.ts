@@ -52,7 +52,7 @@ export class Login {
 
   private readonly redirectTo =
     (this.router.parseUrl(this.router.url).queryParams['redirectTo'] as string | undefined) ??
-    '/employees';
+    '/';
 
   submit(): void {
     // Touching the whole form makes every message visible at once, rather than revealing

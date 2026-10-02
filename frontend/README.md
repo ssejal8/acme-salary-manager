@@ -58,8 +58,8 @@ jar — is decided but not built, so the two are still served separately in deve
   innermost-first. The comment there explains it, and `auth.interceptor.spec.ts` locks it
   in.
 - **Guards hide screens; they do not protect data.** The API authorises every request
-  independently. A guard exists so an EMPLOYEE gets an explanation instead of a page full
-  of 403s.
+  independently. A guard exists so an EMPLOYEE is redirected to their own landing screen
+  instead of a page full of 403s.
 - **The employee list has no state of its own — the URL is the state.** Controls navigate;
   `employee-query.ts` parses the query string back into criteria. So a control must
   navigate *only*, never also set a local signal, or the screen will briefly disagree with
